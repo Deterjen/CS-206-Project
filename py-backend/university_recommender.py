@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 from scipy.spatial.distance import cosine
 from supabase import create_client
 
+from data_pipeline.svd_recommender import SVDRecommender
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -44,6 +46,9 @@ class UniversityRecommender:
         self.user_profiles = self._extract_user_profiles()
         self.university_features = self._extract_university_features()
         self.embeddings_cache = {}  # Cache for embeddings to avoid redundant API calls
+
+        # Initialize SVD recommender
+        self.svd_recommender = SVDRecommender(self.data)
 
         logger.info(f"Loaded {len(self.data)} student records")
         logger.info(f"Found {len(self.universities)} universities")
@@ -431,64 +436,16 @@ class UniversityRecommender:
             return np.zeros(384)
 
     def _find_similar_profiles(self, user_data: Dict, n: int = 5) -> List[Dict]:
-        """Find existing students with similar profiles to the input user."""
-        # Create feature vector for input user
-        user_features = self._extract_user_features(user_data)
+        """Find existing students with similar profiles to the input user using SVD.
 
-        # Calculate similarity with each existing student
-        similarities = []
-        for profile in self.user_profiles:
-            # Extract comparable features
-            profile_features = [
-                profile['preferences']['cost_importance'] if profile['preferences'][
-                                                                 'cost_importance'] is not None else 0,
-                profile['preferences']['culture_importance'] if profile['preferences'][
-                                                                    'culture_importance'] is not None else 0,
-                profile['preferences']['internship_importance'] if profile['preferences'][
-                                                                       'internship_importance'] is not None else 0,
-                profile['preferences']['ranking_influence'] if profile['preferences'][
-                                                                   'ranking_influence'] is not None else 0,
-                profile['preferences']['extracurricular_importance'] if profile['preferences'][
-                                                                            'extracurricular_importance'] is not None else 0,
-                profile['engagement']['leadership_role'] if profile['engagement']['leadership_role'] is not None else 0,
-                profile['engagement']['extracurricular_hours'] if profile['engagement'][
-                                                                      'extracurricular_hours'] is not None else 0
-            ]
+        Args:
+            user_data: User profile and preferences
+            n: Number of similar profiles to return
 
-            # Calculate similarity (Euclidean distance)
-            if len(profile_features) == len(user_features):
-                distance = np.linalg.norm(np.array(profile_features) - np.array(user_features))
-                similarity = 1 / (1 + distance)  # Convert distance to similarity score
-
-                # Add demographic and academic matching bonuses
-                match_score = similarity
-
-                # Personality match
-                if user_data.get('personality') and profile['demographic']['personality'] == user_data['personality']:
-                    match_score += 0.1
-
-                # Learning style match
-                if user_data.get('learning_style') and profile['academic']['learning_style'] == user_data[
-                    'learning_style']:
-                    match_score += 0.1
-
-                # School/major match
-                if user_data.get('school') and profile['academic']['school'] == user_data['school']:
-                    match_score += 0.15
-
-                # Career goal match
-                if user_data.get('career_goal') and profile['academic']['career_goal'] == user_data['career_goal']:
-                    match_score += 0.15
-
-                similarities.append({
-                    'profile_id': profile['id'],
-                    'university': profile['university'],
-                    'satisfaction': profile['satisfaction'],
-                    'similarity': match_score
-                })
-
-        # Sort by similarity score and return top n
-        return sorted(similarities, key=lambda x: x['similarity'], reverse=True)[:n]
+        Returns:
+            List of similar student profiles with similarity scores
+        """
+        return self.svd_recommender.find_similar_profiles(user_data, n)
 
     def _extract_user_features(self, user_data: Dict) -> List[float]:
         """Extract feature vector from user data for similarity comparison."""
@@ -503,22 +460,45 @@ class UniversityRecommender:
         ]
 
     def get_profile_based_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
-        """Get university recommendations based on similar student profiles."""
-        # Find similar existing students
-        similar_profiles = self._find_similar_profiles(user_data, n=10)  # Get more profiles than needed
+        """Get university recommendations based on SVD collaborative filtering.
 
-        if not similar_profiles:
-            return []
+        Args:
+            user_data: User profile and preferences
+            n: Number of recommendations to return
 
-        # Count university occurrences among similar profiles, weighted by similarity
+        Returns:
+            List of recommended universities with scores
+        """
+        # Create a temporary user ID for prediction
+        temp_user_id = f"temp_user_{id(user_data)}"
+
+        # Get similar profiles using our feature-based approach
+        similar_profiles = self._find_similar_profiles(user_data, n=10)
+
+        # Use SVD to predict ratings for all universities
+        predicted_ratings = self.svd_recommender.predict_ratings(temp_user_id)
+
+        # Blend the approaches - weight SVD predictions by similar user insights
         university_scores = {}
+
+        # First, use SVD predictions as base scores
+        for pred in predicted_ratings:
+            uni = pred['university']
+            university_scores[uni] = {
+                'name': uni,
+                'score': pred['predicted_rating'] * 0.6,  # Base weight for SVD prediction
+                'count': 1,
+                'svd_score': pred['predicted_rating']
+            }
+
+        # Add weighted scores from similar users
         for profile in similar_profiles:
             uni = profile['university']
             sim_score = profile['similarity']
-            satisfaction = profile['satisfaction'] if profile['satisfaction'] is not None else 3  # Default to neutral
+            satisfaction = profile['satisfaction'] if profile['satisfaction'] is not None else 3
 
-            # Weight by both similarity and satisfaction
-            weight = sim_score * (satisfaction / 5.0)
+            # Weight by similarity and satisfaction
+            weight = sim_score * (satisfaction / 5.0) * 0.4  # Weight for similar user component
 
             if uni in university_scores:
                 university_scores[uni]['score'] += weight
@@ -527,27 +507,30 @@ class UniversityRecommender:
                 university_scores[uni] = {
                     'name': uni,
                     'score': weight,
-                    'count': 1
+                    'count': 1,
+                    'svd_score': 0
                 }
 
-        # Calculate final scores - average of weighted scores
+        # Calculate final scores
         recommendations = []
         for uni, data in university_scores.items():
-            avg_score = data['score'] / data['count'] if data['count'] > 0 else 0
+            # Normalize based on count
+            normalized_score = data['score'] / data['count'] if data['count'] > 0 else 0
 
             # Get university description and additional info
             uni_info = next((u for u in self.universities if u['name'] == uni), None)
             description = uni_info[
-                'description'] if uni_info else f"{uni} is a university with similar students to your profile."
+                'description'] if uni_info else f"{uni} is recommended based on collaborative filtering."
 
             recommendations.append({
                 'university_id': uni.lower().replace(' ', '_'),
                 'name': uni,
-                'score': avg_score,
-                'match_confidence': min(avg_score * 100, 100),  # Convert to percentage with cap
-                'similar_students_count': data['count'],
+                'score': normalized_score,
+                'svd_score': data['svd_score'],
+                'match_confidence': min(normalized_score * 100, 100),  # Convert to percentage with cap
+                'similar_students_count': data['count'] - 1,  # Subtract 1 for the SVD base score
                 'description': description,
-                'algorithm': 'profile_matching'
+                'algorithm': 'svd_collaborative_filtering'
             })
 
         # Sort by score and return top n
@@ -871,3 +854,9 @@ class UniversityRecommender:
                         f"You value {label} highly, but students at this university typically don't")
 
         return explanation
+
+    def retrain_svd_model(self):
+        """Retrain the SVD model with latest data"""
+        logger.info("Retraining SVD recommender model...")
+        self.svd_recommender = SVDRecommender(self.data)
+        logger.info("SVD model retraining complete")
