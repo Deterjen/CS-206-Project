@@ -628,12 +628,19 @@ class UniversityRecommender:
         # Combine recommendations
         combined_recs = {}
 
+        # Find max scores to normalize
+        max_profile_score = max([rec['score'] for rec in profile_recs]) if profile_recs else 1.0
+        max_embedding_score = max([rec['score'] for rec in embedding_recs]) if embedding_recs else 1.0
+
         # Process profile recommendations
         for rec in profile_recs:
+            # Normalize profile score to 0-1 range
+            normalized_profile_score = min(rec['score'] / max_profile_score, 1.0) if max_profile_score > 0 else 0
+
             combined_recs[rec['university_id']] = {
                 'university_id': rec['university_id'],
                 'name': rec['name'],
-                'profile_score': rec['score'],
+                'profile_score': normalized_profile_score,
                 'embedding_score': 0,
                 'description': rec['description'],
                 'algorithm': 'hybrid'
@@ -641,14 +648,17 @@ class UniversityRecommender:
 
         # Process embedding recommendations
         for rec in embedding_recs:
+            # Normalize embedding score to 0-1 range
+            normalized_embedding_score = min(rec['score'] / max_embedding_score, 1.0) if max_embedding_score > 0 else 0
+
             if rec['university_id'] in combined_recs:
-                combined_recs[rec['university_id']]['embedding_score'] = rec['score']
+                combined_recs[rec['university_id']]['embedding_score'] = normalized_embedding_score
             else:
                 combined_recs[rec['university_id']] = {
                     'university_id': rec['university_id'],
                     'name': rec['name'],
                     'profile_score': 0,
-                    'embedding_score': rec['score'],
+                    'embedding_score': normalized_embedding_score,
                     'description': rec['description'],
                     'algorithm': 'hybrid'
                 }
@@ -665,8 +675,8 @@ class UniversityRecommender:
                 'university_id': uni_id,
                 'name': rec['name'],
                 'score': final_score,
-                'profile_match': rec['profile_score'],
-                'semantic_match': rec['embedding_score'],
+                'profile_match': rec['profile_score'] * 100,  # Convert to percentage (0-100)
+                'semantic_match': rec['embedding_score'] * 100,  # Convert to percentage (0-100)
                 'description': rec['description'],
                 'algorithm': 'hybrid'
             })
