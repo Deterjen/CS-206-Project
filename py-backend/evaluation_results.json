@@ -1,0 +1,93 @@
+{
+  "leave_one_out": {
+    "hit_ratio": {
+      "profile": 1.0,
+      "embedding": 1.0,
+      "hybrid": 1.0
+    },
+    "precision_at_k": {
+      "profile": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "embedding": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "hybrid": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": 0.2
+      }
+    },
+    "recall_at_k": {
+      "profile": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "embedding": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "hybrid": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": 1.0
+      }
+    },
+    "ndcg_at_k": {
+      "profile": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "embedding": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": NaN
+      },
+      "hybrid": {
+        "1": NaN,
+        "3": NaN,
+        "5": NaN,
+        "10": 1.0
+      }
+    },
+    "prediction_time": {
+      "profile": 0.0003219922383626302,
+      "embedding": 0.2232010285059611,
+      "hybrid": 0.0003908634185791016
+    }
+  },
+  "coverage": {
+    "coverage_percentage": {
+      "profile": 100.0,
+      "embedding": 100.0,
+      "hybrid": 100.0
+    },
+    "total_universities": 5
+  },
+  "explanation": {
+    "avg_strengths_per_rec": 3.2666666666666666,
+    "avg_considerations_per_rec": 0.38333333333333336,
+    "avg_compatibility_score": 1.581275462962963,
+    "avg_semantic_similarity": 0.856219005520747,
+    "avg_similar_students": 0.95,
+    "explanations_with_learning_style": 86.66666666666667,
+    "explanations_with_personality": 90.0,
+    "explanations_with_career": 81.66666666666667,
+    "explanations_with_importance_alignment": 88.33333333333333
+  }
+}

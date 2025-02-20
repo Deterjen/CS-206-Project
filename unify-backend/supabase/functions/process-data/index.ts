@@ -5,19 +5,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Papa from 'https://esm.sh/papaparse@5.4.1'
 import { UserProfile } from '../shared/types.ts'
 
+// const format_userprofile = (data: UserProfile): string => {
+//   return `
+//     Student profile: ${data.age} year old ${data.gender} from ${data.nationality}.
+//     Academic background: ${data.qualification} with GPA ${data.high_school_gpa}, studying ${data.major}.
+//     Career goal: Aims to be a ${data.career_goal}.
+//     Learning preferences: Prefers ${data.learning_style} learning in a ${data.campus_setting} setting with ${data.population_preference} student population.
+//     Values: Prioritizes ${data.selection_criteria.join(', ')}.
+//     University interests: ${data.university_tags.join(', ')}.
+//     Living arrangement: ${data.living}.
+//     Financial aspects: Cost importance ${data.cost_importance}/10, Scholarship status: ${data.scholarship ? 'Yes' : 'No'}.
+//     Internships: Importance ${data.internship_importance}/10, University internship program: ${data.university_internship ? 'Yes' : 'No'}.
+//     Decision influences: Family (${data.family_influence}/10), Friends (${data.friend_influence}/10), Social Media (${data.social_media_influence}/10), Rankings (${data.ranking_influence}/10).
+//     University choices: ${data.considered_others ? `Considered others, second choice: ${data.second_choice}` : 'Did not consider others'}.
+//   `.trim();
+// }
+
 const format_userprofile = (data: UserProfile): string => {
   return `
-    Student profile: ${data.age} year old ${data.gender} from ${data.nationality}.
-    Academic background: ${data.qualification} with GPA ${data.high_school_gpa}, studying ${data.major}.
-    Career goal: Aims to be a ${data.career_goal}.
-    Learning preferences: Prefers ${data.learning_style} learning in a ${data.campus_setting} setting with ${data.population_preference} student population.
-    Values: Prioritizes ${data.selection_criteria.join(', ')}.
+    Academic background: ${data.qualification} studying ${data.major}
     University interests: ${data.university_tags.join(', ')}.
-    Living arrangement: ${data.living}.
-    Financial aspects: Cost importance ${data.cost_importance}/10, Scholarship status: ${data.scholarship ? 'Yes' : 'No'}.
-    Internships: Importance ${data.internship_importance}/10, University internship program: ${data.university_internship ? 'Yes' : 'No'}.
-    Decision influences: Family (${data.family_influence}/10), Friends (${data.friend_influence}/10), Social Media (${data.social_media_influence}/10), Rankings (${data.ranking_influence}/10).
-    University choices: ${data.considered_others ? `Considered others, second choice: ${data.second_choice}` : 'Did not consider others'}.
   `.trim();
 }
 
@@ -49,7 +56,7 @@ Deno.serve(async (req) => {
     for (const response of surveyResponses) {
       try {
         // Convert survey response to UserProfile format
-        const userProfile: UserProfile = {
+        const userProfile: Partial<UserProfile> = {
           age: response.age,
           gender: response.gender,
           nationality: response.nationality,

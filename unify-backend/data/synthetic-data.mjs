@@ -38,43 +38,43 @@ function generateRandomResponse(university) {
     }
 
     const response = {
-        age: Math.floor(Math.random() * (25 - 19) + 19),
-        gender: genders[Math.floor(Math.random() * genders.length)],
-        nationality: nationalities[Math.floor(Math.random() * nationalities.length)],
+        // age: Math.floor(Math.random() * (25 - 19) + 19),
+        // gender: genders[Math.floor(Math.random() * genders.length)],
+        // nationality: nationalities[Math.floor(Math.random() * nationalities.length)],
         qualification: qualification,
-        high_school_gpa: (Math.random() * (4.0 - 3.0) + 3.0).toFixed(2),
-        university: university,
-        selection_criteria: (() => {
-            const criteria = ['Ranking', 'Tuition Fees', 'Scholarships', 'Reputation', 'Campus Facilities', 
-                            'Location', 'Job Placement Rate', 'Specific Course Offerings', 'Faculty Quality'];
-            const shuffled = criteria.sort(() => 0.5 - Math.random());
-            return shuffled.slice(0, 3);
-        })(),
-        considered_others: Math.random() < 0.8 ? true : false,
-        second_choice: (() => {
-            let others = universities.filter(u => u !== university);
-            return others[Math.floor(Math.random() * others.length)];
-        })(),
-        satisfaction: Math.floor(Math.random() * (10 - 6) + 6),
+        // high_school_gpa: (Math.random() * (4.0 - 3.0) + 3.0).toFixed(2),
+        // university: university,
+        // selection_criteria: (() => {
+        //     const criteria = ['Ranking', 'Tuition Fees', 'Scholarships', 'Reputation', 'Campus Facilities', 
+        //                     'Location', 'Job Placement Rate', 'Specific Course Offerings', 'Faculty Quality'];
+        //     const shuffled = criteria.sort(() => 0.5 - Math.random());
+        //     return shuffled.slice(0, 3);
+        // })(),
+        // considered_others: Math.random() < 0.8 ? true : false,
+        // second_choice: (() => {
+        //     let others = universities.filter(u => u !== university);
+        //     return others[Math.floor(Math.random() * others.length)];
+        // })(),
+        // satisfaction: Math.floor(Math.random() * (10 - 6) + 6),
         university_tags: (() => {
             const tags = universityTags[university];
             const shuffled = tags.sort(() => 0.5 - Math.random());
             return shuffled.slice(0, 2);
         })(),
-        learning_style: learningStyles[Math.floor(Math.random() * learningStyles.length)],
-        population_preference: populationPreference[Math.floor(Math.random() * populationPreference.length)],
-        campus_setting: campusSettings[Math.floor(Math.random() * campusSettings.length)],
-        cost_importance: Math.floor(Math.random() * 10) + 1,
-        scholarship: Math.random() < 0.3 ? true : false,
-        living: livingArrangement[Math.floor(Math.random() * livingArrangement.length)],
+        // learning_style: learningStyles[Math.floor(Math.random() * learningStyles.length)],
+        // population_preference: populationPreference[Math.floor(Math.random() * populationPreference.length)],
+        // campus_setting: campusSettings[Math.floor(Math.random() * campusSettings.length)],
+        // cost_importance: Math.floor(Math.random() * 10) + 1,
+        // scholarship: Math.random() < 0.3 ? true : false,
+        // living: livingArrangement[Math.floor(Math.random() * livingArrangement.length)],
         major: majors[university][Math.floor(Math.random() * majors[university].length)],
-        career_goal: careerGoals[Math.floor(Math.random() * careerGoals.length)],
-        internship_importance: Math.floor(Math.random() * (10 - 7) + 7),
-        university_internship: Math.random() < 0.6 ? true : false,
-        family_influence: Math.floor(Math.random() * 10) + 1,
-        friend_influence: Math.floor(Math.random() * 10) + 1,
-        social_media_influence: Math.floor(Math.random() * 10) + 1,
-        ranking_influence: Math.floor(Math.random() * (10 - 5) + 5)
+        // career_goal: careerGoals[Math.floor(Math.random() * careerGoals.length)],
+        // internship_importance: Math.floor(Math.random() * (10 - 7) + 7),
+        // university_internship: Math.random() < 0.6 ? true : false,
+        // family_influence: Math.floor(Math.random() * 10) + 1,
+        // friend_influence: Math.floor(Math.random() * 10) + 1,
+        // social_media_influence: Math.floor(Math.random() * 10) + 1,
+        // ranking_influence: Math.floor(Math.random() * (10 - 5) + 5)
     };
     return response;
 }

@@ -24,6 +24,7 @@ interface ProspectiveStudentProfile {
   friend_influence: number;
   social_media_influence: number;
   ranking_influence: number;
+  major: string
 }
 
 interface RecommendationRequest {
@@ -34,17 +35,22 @@ interface RecommendationRequest {
 }
 
 const format_profile = (profile: ProspectiveStudentProfile): string => {
+  // return `
+  //   Prospective student profile: ${profile.age} year old ${profile.gender} from ${profile.nationality}.
+  //   Academic background: ${profile.qualification} with GPA ${profile.high_school_gpa}.
+  //   Career goal: Aims to be a ${profile.career_goal}.
+  //   Learning preferences: Prefers ${profile.learning_style} learning in a ${profile.campus_setting} setting with ${profile.population_preference} student population.
+  //   Values: Prioritizes ${profile.selection_criteria.join(', ')}.
+  //   Interests: ${profile.university_tags.join(', ')}.
+  //   Living arrangement: ${profile.living}.
+  //   Financial aspects: Cost importance ${profile.cost_importance}/10, Scholarship status: ${profile.scholarship ? 'Yes' : 'No'}.
+  //   Internships: Importance ${profile.internship_importance}/10, University internship program: ${profile.university_internship ? 'Yes' : 'No'}.
+  //   Decision influences: Family (${profile.family_influence}/10), Friends (${profile.friend_influence}/10), Social Media (${profile.social_media_influence}/10), Rankings (${profile.ranking_influence}/10).
+  // `.trim();
   return `
-    Prospective student profile: ${profile.age} year old ${profile.gender} from ${profile.nationality}.
-    Academic background: ${profile.qualification} with GPA ${profile.high_school_gpa}.
-    Career goal: Aims to be a ${profile.career_goal}.
-    Learning preferences: Prefers ${profile.learning_style} learning in a ${profile.campus_setting} setting with ${profile.population_preference} student population.
-    Values: Prioritizes ${profile.selection_criteria.join(', ')}.
+    Academic background: ${profile.qualification}.
     Interests: ${profile.university_tags.join(', ')}.
-    Living arrangement: ${profile.living}.
-    Financial aspects: Cost importance ${profile.cost_importance}/10, Scholarship status: ${profile.scholarship ? 'Yes' : 'No'}.
-    Internships: Importance ${profile.internship_importance}/10, University internship program: ${profile.university_internship ? 'Yes' : 'No'}.
-    Decision influences: Family (${profile.family_influence}/10), Friends (${profile.friend_influence}/10), Social Media (${profile.social_media_influence}/10), Rankings (${profile.ranking_influence}/10).
+    University Major: ${profile.major}
   `.trim();
 }
 
@@ -63,13 +69,17 @@ Deno.serve(async (req) => {
     console.log('User profile:', userProfile);
 
     // Validate required fields
+    // const requiredFields = [
+    //   'age', 'gender', 'nationality', 'qualification', 'high_school_gpa',
+    //   'selection_criteria', 'university_tags', 'learning_style',
+    //   'population_preference', 'campus_setting', 'cost_importance',
+    //   'scholarship', 'living', 'career_goal', 'internship_importance',
+    //   'university_internship', 'family_influence', 'friend_influence',
+    //   'social_media_influence', 'ranking_influence'
+    // ];
+
     const requiredFields = [
-      'age', 'gender', 'nationality', 'qualification', 'high_school_gpa',
-      'selection_criteria', 'university_tags', 'learning_style',
-      'population_preference', 'campus_setting', 'cost_importance',
-      'scholarship', 'living', 'career_goal', 'internship_importance',
-      'university_internship', 'family_influence', 'friend_influence',
-      'social_media_influence', 'ranking_influence'
+      'qualification', 'university_tags', 'major'
     ];
 
     const missingFields = requiredFields.filter(field => !(field in userProfile));
@@ -141,9 +151,9 @@ Deno.serve(async (req) => {
       const avgSimilarity = meanBy(profiles, 'similarity');
       
       // Calculate criteria and tag matches
-      const criteriaMatch = profiles.filter(p => 
-        p.selection_criteria.some(c => userProfile.selection_criteria.includes(c))
-      ).length / profiles.length;
+      // const criteriaMatch = profiles.filter(p => 
+      //   p.selection_criteria.some(c => userProfile.selection_criteria.includes(c))
+      // ).length / profiles.length;
       
       const tagsMatch = profiles.filter(p =>
         p.university_tags.some(t => userProfile.university_tags.includes(t))
@@ -156,7 +166,7 @@ Deno.serve(async (req) => {
       const compositeScore = (
         avgSimilarity * 0.4 +          // Already in 0-1 range from vector similarity
         normalizedSatisfaction * 0.3 +  // Normalized from 0-10 to 0-1 range
-        criteriaMatch * 0.2 +           // Already in 0-1 range (ratio)
+        // criteriaMatch * 0.2 +           // Already in 0-1 range (ratio)
         tagsMatch * 0.1                 // Already in 0-1 range (ratio)
       );
 
@@ -164,8 +174,8 @@ Deno.serve(async (req) => {
         university_name: university,
         similarity_score: compositeScore,
         average_satisfaction: avgSatisfaction,
-        num_similar_profiles: profiles.length,
-        matching_criteria_ratio: criteriaMatch,
+        // num_similar_profiles: profiles.length,
+        // matching_criteria_ratio: criteriaMatch,
         matching_tags_ratio: tagsMatch
       };
     });
