@@ -46,14 +46,16 @@ class RecommenderEvaluator:
 
         return train_data, test_data
 
-    def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5, batch_size: int = 32) -> Dict:
+    def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5) -> Dict:
         """
         Evaluate recommendations using various metrics
 
         Args:
             test_data: Test dataset
             k: Number of recommendations to generate
-            batch_size: Size of batches for embedding generation
+
+        Returns:
+            Dictionary containing evaluation metrics
         """
         if self.recommender is None:
             raise ValueError("Recommender not initialized. Run prepare_train_test_split first.")
@@ -75,57 +77,56 @@ class RecommenderEvaluator:
 
         # Use only universities from training data for coverage calculation
         train_universities = set(uni['name'] for uni in self.recommender.universities)
-        all_recommendations = {method: [] for method in ['profile_based', 'embedding', 'hybrid']}
+        all_recommendations = []
 
-        # Process test data in batches
-        for start_idx in range(0, len(test_data), batch_size):
-            batch_data = test_data.iloc[start_idx:start_idx + batch_size]
+        # Evaluate each test user
+        for idx, user in test_data.iterrows():
+            # Convert row to dictionary, excluding the actual university
+            user_dict = user.drop('university').to_dict()
 
-            # Convert batch to list of user dictionaries
-            user_dicts = [user.drop('university').to_dict() for _, user in batch_data.iterrows()]
-            actual_universities = batch_data['university'].tolist()
-
+            # Get recommendations using different methods
             try:
-                # Get recommendations for each method
-                profile_recs = [self.recommender.get_profile_based_recommendations(user, k)
-                                for user in user_dicts]
-                embedding_recs = self.recommender.get_embedding_recommendations_batch(user_dicts, k)
-                hybrid_recs = self.recommender.get_hybrid_recommendations_batch(user_dicts, k)
+                methods = {
+                    'profile_based': self.recommender.get_profile_based_recommendations,
+                    'embedding': self.recommender.get_embedding_recommendations,
+                    'hybrid': self.recommender.get_hybrid_recommendations
+                }
 
-                # Process metrics for each user in the batch
-                for idx, actual_uni in enumerate(actual_universities):
-                    for method_name, recs in [
-                        ('profile_based', profile_recs[idx]),
-                        ('embedding', embedding_recs[idx]),
-                        ('hybrid', hybrid_recs[idx])
-                    ]:
-                        if not recs:  # Skip if no recommendations
-                            continue
+                all_recommendations = {method: [] for method in methods.keys()}
+                actual_university = user['university']
+
+                for method_name, recommender_method in methods.items():
+                    try:
+                        recommendations = recommender_method(user_dict, k)
 
                         # Store recommendations for personalization calculation
-                        all_recommendations[method_name].append([rec['name'] for rec in recs])
+                        all_recommendations[method_name].append([rec['name'] for rec in recommendations])
 
                         # Update coverage
-                        metrics[method_name]['coverage'].update([rec['name'] for rec in recs])
+                        metrics[method_name]['coverage'].update([rec['name'] for rec in recommendations])
 
                         # Calculate relevance metrics
-                        predicted_universities = [rec['name'] for rec in recs]
+                        predicted_universities = [rec['name'] for rec in recommendations]
 
                         # NDCG calculation
-                        relevance = [1 if uni == actual_uni else 0 for uni in predicted_universities]
+                        relevance = [1 if uni == actual_university else 0 for uni in predicted_universities]
                         if sum(relevance) > 0:
                             metrics[method_name]['ndcg'].append(self._calculate_ndcg(relevance))
 
                         # Precision and Recall
-                        precision = 1 if actual_uni in predicted_universities else 0
+                        precision = 1 if actual_university in predicted_universities else 0
                         metrics[method_name]['precision'].append(precision)
                         metrics[method_name]['recall'].append(precision)
 
                         # Calculate diversity of recommendations
-                        metrics[method_name]['diversity'].append(self._calculate_diversity(recs))
+                        metrics[method_name]['diversity'].append(self._calculate_diversity(recommendations))
+
+                    except Exception as e:
+                        self.logger.warning(f"Error with {method_name} recommendations for user {idx}: {str(e)}")
+                        continue
 
             except Exception as e:
-                self.logger.warning(f"Error processing batch starting at index {start_idx}: {str(e)}")
+                self.logger.warning(f"Error generating recommendations for user {idx}: {str(e)}")
                 continue
 
         # Calculate personalization and aggregate metrics for each method
@@ -194,96 +195,6 @@ class RecommenderEvaluator:
         # Return dissimilarity (1 - similarity) as personalization score
         return 1 - (similarity_sum / comparison_count) if comparison_count > 0 else 0
 
-    def perform_scenario_testing(self, scenarios: List[Dict]) -> Dict:
-        """
-        Test specific scenarios to evaluate recommender behavior
-
-        Args:
-            scenarios: List of test scenarios with expected outcomes
-
-        Returns:
-            Dictionary containing scenario test results
-        """
-        if self.recommender is None:
-            raise ValueError("Recommender not initialized. Run prepare_train_test_split first.")
-
-        results = {}
-
-        for i, scenario in enumerate(scenarios):
-            scenario_name = scenario.get('name', f'Scenario {i + 1}')
-            user_profile = scenario['profile']
-            expected_traits = scenario.get('expected_traits', [])
-
-            # Get recommendations
-            try:
-                recommendations = self.recommender.get_hybrid_recommendations(user_profile)
-
-                # Check if recommendations match expected traits
-                matches = []
-                for trait in expected_traits:
-                    trait_found = any(
-                        trait.lower() in rec['description'].lower()
-                        for rec in recommendations
-                    )
-                    matches.append(trait_found)
-
-                results[scenario_name] = {
-                    'success_rate': sum(matches) / len(matches) if matches else 0,
-                    'recommendations': [rec['name'] for rec in recommendations],
-                    'matched_traits': [trait for trait, match in zip(expected_traits, matches) if match]
-                }
-            except Exception as e:
-                self.logger.warning(f"Error in scenario {scenario_name}: {str(e)}")
-                results[scenario_name] = {
-                    'error': str(e),
-                    'success_rate': 0,
-                    'recommendations': [],
-                    'matched_traits': []
-                }
-
-        return results
-
-    def evaluate_cold_start(self, sparse_profiles: List[Dict]) -> Dict:
-        """
-        Evaluate recommender performance on cold-start scenarios
-
-        Args:
-            sparse_profiles: List of user profiles with minimal information
-
-        Returns:
-            Dictionary containing cold-start evaluation metrics
-        """
-        if self.recommender is None:
-            raise ValueError("Recommender not initialized. Run prepare_train_test_split first.")
-
-        results = {
-            'coverage': [],
-            'diversity': [],
-            'confidence_scores': []
-        }
-
-        for profile in sparse_profiles:
-            try:
-                recommendations = self.recommender.get_hybrid_recommendations(profile)
-
-                # Calculate metrics
-                results['coverage'].append(len(recommendations))
-                results['diversity'].append(self._calculate_diversity(recommendations))
-                results['confidence_scores'].append(
-                    [rec.get('match_confidence', 0) for rec in recommendations]
-                )
-            except Exception as e:
-                self.logger.warning(f"Error in cold start evaluation: {str(e)}")
-                continue
-
-        # Aggregate results
-        return {
-            'avg_coverage': np.mean(results['coverage']) if results['coverage'] else 0,
-            'avg_diversity': np.mean(results['diversity']) if results['diversity'] else 0,
-            'avg_confidence': np.mean([np.mean(scores) for scores in results['confidence_scores']]) if results[
-                'confidence_scores'] else 0
-        }
-
 
 # Example usage:
 def main():
@@ -302,37 +213,6 @@ def main():
         print(f"\n{method_name.upper()} Method:")
         for metric, value in metrics.items():
             print(f"{metric}: {value:.4f}")
-
-    # Test specific scenarios
-    scenarios = [
-        {
-            'name': 'Engineering Student',
-            'profile': {
-                'school': 'Engineering',
-                'learning_style': 'hands-on',
-                'career_goal': 'Software Engineer',
-                'personality': 'Introverted'
-            },
-            'expected_traits': ['technical', 'engineering', 'practical']
-        },
-        {
-            'name': 'Business Leader',
-            'profile': {
-                'school': 'Business',
-                'personality': 'Extroverted',
-                'leadership_role': 1,
-                'career_goal': 'Entrepreneur'
-            },
-            'expected_traits': ['business', 'leadership', 'entrepreneurship']
-        }
-    ]
-
-    scenario_results = evaluator.perform_scenario_testing(scenarios)
-    print("\nScenario Testing Results:")
-    for scenario, results in scenario_results.items():
-        print(f"\n{scenario}:")
-        print(f"Success Rate: {results['success_rate']:.2f}")
-        print(f"Matched Traits: {', '.join(results['matched_traits'])}")
 
 
 if __name__ == "__main__":

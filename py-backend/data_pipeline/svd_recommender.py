@@ -1,9 +1,12 @@
+from typing import Dict, List
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from surprise import Dataset, Reader, SVD
 
 from data_pipeline.text_embedder import TextEmbedder
+from data_pipeline.user_profile_embedding_manager import embedding_manager
 
 
 class SVDRecommender:
@@ -21,6 +24,7 @@ class SVDRecommender:
         self.svd_model = None
         self.users_encoded = None
         self.universities = list(data_df['university'].unique())
+        self.embedding_manager = embedding_manager
 
         # Initialize and train the model
         self._prepare_training_data()
@@ -201,33 +205,13 @@ class SVDRecommender:
 
         return combined_features
 
-    def find_similar_profiles(self, user_data, n=5):
-        """Find similar student profiles based on encoded features
-
-        Args:
-            user_data (dict): User profile and preferences
-            n (int): Number of similar profiles to return
-
-        Returns:
-            list: Similar student profiles with similarity scores
-        """
-        # Encode the new user
-        user_encoded = self._encode_user(user_data)
-
-        # Calculate cosine similarity with existing users
-        similarities = []
-        for idx, row_features in self.users_encoded.iterrows():
-            # Calculate cosine similarity
-            similarity = self._cosine_similarity(user_encoded, row_features.values)
-            similarities.append({
-                'profile_id': f"student_{idx}",
-                'university': self.data_df.iloc[idx]['university'],
-                'satisfaction': self.data_df.iloc[idx]['satisfaction_rating'],
-                'similarity': similarity
-            })
-
-        # Sort by similarity and return top n
-        return sorted(similarities, key=lambda x: x['similarity'], reverse=True)[:n]
+    def find_similar_profiles(self, user_data: Dict, n: int = 5) -> List[Dict]:
+        """Find similar student profiles based on encoded features."""
+        return self.embedding_manager.find_similar_profiles(
+            user_data=user_data,
+            profiles_df=self.data_df,
+            n=n
+        )
 
     def _cosine_similarity(self, a, b):
         """Calculate cosine similarity between two vectors"""

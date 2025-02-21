@@ -14,7 +14,7 @@ import pandas as pd
 from scipy.spatial.distance import cosine
 
 from data_pipeline.svd_recommender import SVDRecommender
-from data_pipeline.text_embedder import TextEmbedder
+from data_pipeline.user_profile_embedding_manager import embedding_manager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -31,21 +31,24 @@ class UniversityRecommender:
         Args:
             data_path: Path to the survey data CSV file
         """
+        try:
+            self.data = self._load_data(data_path)
+            self.universities = self._extract_universities()
+            self.user_profiles = self._extract_user_profiles()
+            self.university_features = self._extract_university_features()
+            self.embedding_manager = embedding_manager
 
-        self.data = self._load_data(data_path)
-        self.universities = self._extract_universities()
-        self.user_profiles = self._extract_user_profiles()
-        self.university_features = self._extract_university_features()
-        self.embeddings_cache = {}  # Cache for embeddings to avoid redundant API calls
+            # Precompute embeddings for training data
+            self.embedding_manager.precompute_embeddings(self.data, self.universities)
 
-        # Initialize SVD recommender
-        self.svd_recommender = SVDRecommender(self.data)
+            # Initialize SVD recommender
+            self.svd_recommender = SVDRecommender(self.data, self.user_profiles)
 
-        # Initialize TextEmbedder
-        self.text_embedder = TextEmbedder(embedding_model)
-
-        logger.info(f"Loaded {len(self.data)} student records")
-        logger.info(f"Found {len(self.universities)} universities")
+            logger.info(f"Loaded {len(self.data)} student records")
+            logger.info(f"Found {len(self.universities)} universities")
+        except Exception as e:
+            logger.error(f"Error initializing recommender: {e}")
+            raise
 
     def _load_data(self, data_path: str) -> pd.DataFrame:
         """Load and preprocess the survey data."""
@@ -397,67 +400,13 @@ class UniversityRecommender:
 
         return ". ".join([p for p in pref_parts if p])
 
-    def _batch_get_embeddings(self, texts: List[str], batch_size: int = 128) -> Dict[str, np.ndarray]:
-        """
-        Get embeddings for multiple texts in batches
-
-        Args:
-            texts: List of texts to encode
-            batch_size: Size of batches for processing
-
-        Returns:
-            Dictionary mapping text to embedding
-        """
-        # Remove duplicates while preserving order
-        unique_texts = list(dict.fromkeys(texts))
-
-        # Check cache first
-        uncached_texts = []
-        embeddings_dict = {}
-        for text in unique_texts:
-            if text in self.embeddings_cache:
-                embeddings_dict[text] = self.embeddings_cache[text]
-            else:
-                uncached_texts.append(text)
-
-        # Process uncached texts in batches
-        for i in range(0, len(uncached_texts), batch_size):
-            batch = uncached_texts[i:i + batch_size]
-            try:
-                batch_embeddings = self.text_embedder.encode(batch)
-
-                # Normalize and cache results
-                for text, embedding in zip(batch, batch_embeddings):
-                    if np.linalg.norm(embedding) > 0:
-                        embedding = embedding / np.linalg.norm(embedding)
-                    self.embeddings_cache[text] = embedding
-                    embeddings_dict[text] = embedding
-            except Exception as e:
-                logger.error(f"Error generating batch embeddings: {e}")
-                # Fill failed embeddings with zeros
-                for text in batch:
-                    if text not in embeddings_dict:
-                        embeddings_dict[text] = np.zeros(384)
-                        self.embeddings_cache[text] = embeddings_dict[text]
-
-        return embeddings_dict
-
-    def _get_embedding(self, text: str) -> np.ndarray:
-        """Get embedding for a single text using batch processing internally."""
-        embeddings = self._batch_get_embeddings([text])
-        return embeddings[text]
-
     def _find_similar_profiles(self, user_data: Dict, n: int = 5) -> List[Dict]:
-        """Find existing students with similar profiles to the input user using SVD.
-
-        Args:
-            user_data: User profile and preferences
-            n: Number of similar profiles to return
-
-        Returns:
-            List of similar student profiles with similarity scores
-        """
-        return self.svd_recommender.find_similar_profiles(user_data, n)
+        """Find existing students with similar profiles to the input user."""
+        return self.embedding_manager.find_similar_profiles(
+            user_data=user_data,
+            profiles_df=self.data,
+            n=n
+        )
 
     def _extract_user_features(self, user_data: Dict) -> List[float]:
         """Extract feature vector from user data for similarity comparison."""
@@ -543,67 +492,28 @@ class UniversityRecommender:
         return sorted(recommendations, key=lambda x: x['score'], reverse=True)[:n]
 
     def get_embedding_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
-        """Get recommendations using embedding similarity with batch processing."""
-        # Create user profile and preferences text
-        # First convert user_data to expected format
-        formatted_user = {
-            'demographic': {
-                'age': user_data.get('age'),
-                'gender': user_data.get('gender'),
-                'personality': user_data.get('personality'),
-                'student_status': user_data.get('student_status')
-            },
-            'academic': {
-                'learning_style': user_data.get('learning_style'),
-                'school': user_data.get('school'),
-                'career_goal': user_data.get('career_goal'),
-                'plans_further_education': user_data.get('plans_further_education')
-            },
-            'preferences': {
-                'preferred_population': user_data.get('preferred_population'),
-                'residence': user_data.get('residence'),
-                'cost_importance': user_data.get('cost_importance'),
-                'culture_importance': user_data.get('culture_importance'),
-                'internship_importance': user_data.get('internship_importance'),
-                'ranking_influence': user_data.get('ranking_influence'),
-                'extracurricular_importance': user_data.get('extracurricular_importance'),
-                'family_influence': user_data.get('family_influence'),
-                'friend_influence': user_data.get('friend_influence'),
-                'social_media_influence': user_data.get('social_media_influence')
-            },
-            'engagement': {
-                'leadership_role': user_data.get('leadership_role'),
-                'extracurricular_hours': user_data.get('extracurricular_hours'),
-                'extracurricular_type': user_data.get('extracurricular_type'),
-                'cca_count': user_data.get('cca_count', 0)
-            },
-            'selection_criteria': user_data.get('selection_criteria', []),
-            'ccas': user_data.get('ccas', [])
-        }
-
-        # Assume this helper exists
-        profile_text = self._create_profile_text(formatted_user)
-        preferences_text = self._create_preferences_text(formatted_user)
-
-        # Collect all texts needing embeddings
-        texts_to_embed = [profile_text, preferences_text]
-        for uni in self.universities:
-            texts_to_embed.append(uni['description'])
-
-        # Get all embeddings in batch
+        """Get university recommendations based on embedding similarity."""
         try:
-            embeddings = self._batch_get_embeddings(texts_to_embed)
-            profile_embedding = embeddings[profile_text]
-            preferences_embedding = embeddings[preferences_text]
+            # Get user embeddings
+            user_embeddings = self.embedding_manager.get_user_embeddings(user_data)
 
-            # Calculate similarity with each university
+            # Calculate similarities using cached university embeddings
             similarities = []
             for uni in self.universities:
-                uni_embedding = embeddings[uni['description']]
+                uni_embedding = self.embedding_manager.get_university_embedding(
+                    uni['id'],
+                    uni['description']
+                )
 
                 # Calculate similarities
-                pref_similarity = 1 - cosine(preferences_embedding, uni_embedding)
-                profile_similarity = 1 - cosine(profile_embedding, uni_embedding)
+                pref_similarity = self.embedding_manager._cosine_similarity(
+                    user_embeddings['preferences'],
+                    uni_embedding
+                )
+                profile_similarity = self.embedding_manager._cosine_similarity(
+                    user_embeddings['profile'],
+                    uni_embedding
+                )
 
                 # Weighted combination
                 combined_similarity = 0.7 * pref_similarity + 0.3 * profile_similarity
@@ -617,11 +527,9 @@ class UniversityRecommender:
                 })
 
             return sorted(similarities, key=lambda x: x['score'], reverse=True)[:n]
-
         except Exception as e:
-            logger.error(f"Error in batch embedding recommendations: {e}")
-            # Fallback to profile-based recommendations
-            return self.get_profile_based_recommendations(user_data, n)
+            logger.error(f"Error in get_embedding_recommendations: {e}")
+            return []
 
     def get_hybrid_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
         """Get recommendations using a hybrid approach combining profile matching and embeddings.
@@ -686,161 +594,6 @@ class UniversityRecommender:
 
         # Sort and return top n recommendations
         return sorted(recommendations, key=lambda x: x['score'], reverse=True)[:n]
-
-    def get_embedding_recommendations_batch(self, user_dicts: List[Dict], n: int = 5) -> List[List[Dict]]:
-        """Get recommendations using embedding similarity for multiple users at once."""
-        batch_recommendations = []
-
-        # Process multiple users in parallel
-        formatted_users = []
-        profile_texts = []
-        preference_texts = []
-
-        # Prepare texts for batch embedding
-        for user_data in user_dicts:
-            # Format user profile
-            formatted_user = {
-                'demographic': {
-                    'age': user_data.get('age'),
-                    'gender': user_data.get('gender'),
-                    'personality': user_data.get('personality'),
-                    'student_status': user_data.get('student_status')
-                },
-                'academic': {
-                    'learning_style': user_data.get('learning_style'),
-                    'school': user_data.get('school'),
-                    'career_goal': user_data.get('career_goal'),
-                    'plans_further_education': user_data.get('plans_further_education')
-                },
-                'preferences': {
-                    'preferred_population': user_data.get('preferred_population'),
-                    'residence': user_data.get('residence'),
-                    'cost_importance': user_data.get('cost_importance'),
-                    'culture_importance': user_data.get('culture_importance'),
-                    'internship_importance': user_data.get('internship_importance'),
-                    'ranking_influence': user_data.get('ranking_influence'),
-                    'extracurricular_importance': user_data.get('extracurricular_importance')
-                },
-                'engagement': {
-                    'leadership_role': user_data.get('leadership_role', 0),
-                    'extracurricular_hours': user_data.get('extracurricular_hours', 0),
-                    'extracurricular_type': user_data.get('extracurricular_type')
-                },
-                'selection_criteria': user_data.get('selection_criteria', []),
-                'ccas': user_data.get('ccas', [])
-            }
-
-            # Generate text representations
-            profile_text = self._create_profile_text(formatted_user)
-            preference_text = self._create_preferences_text(formatted_user)
-
-            formatted_users.append(formatted_user)
-            profile_texts.append(profile_text)
-            preference_texts.append(preference_text)
-
-        # Get embeddings for all texts in batch
-        try:
-            profile_embeddings = [self._get_embedding(text) for text in profile_texts]
-            preference_embeddings = [self._get_embedding(text) for text in preference_texts]
-
-            # Cache university embeddings if not already cached
-            for uni in self.universities:
-                if uni['description'] not in self.embeddings_cache:
-                    self.embeddings_cache[uni['description']] = self._get_embedding(uni['description'])
-        except Exception as e:
-            logger.error(f"Error generating batch embeddings: {e}")
-            return [[] for _ in user_dicts]
-
-        # Calculate recommendations for each user
-        for profile_emb, pref_emb in zip(profile_embeddings, preference_embeddings):
-            similarities = []
-            for uni in self.universities:
-                try:
-                    uni_embedding = self.embeddings_cache[uni['description']]
-
-                    # Calculate similarity scores
-                    pref_similarity = 1 - cosine(pref_emb, uni_embedding)
-                    profile_similarity = 1 - cosine(profile_emb, uni_embedding)
-
-                    # Weighted combination
-                    combined_similarity = 0.7 * pref_similarity + 0.3 * profile_similarity
-
-                    similarities.append({
-                        'university_id': uni['id'],
-                        'name': uni['name'],
-                        'score': combined_similarity,
-                        'description': uni['description'],
-                        'algorithm': 'embedding'
-                    })
-                except Exception as e:
-                    continue
-
-            # Sort and get top n recommendations
-            user_recommendations = sorted(similarities, key=lambda x: x['score'], reverse=True)[:n]
-            batch_recommendations.append(user_recommendations)
-
-        return batch_recommendations
-
-    def get_hybrid_recommendations_batch(self, user_dicts: List[Dict], n: int = 5) -> List[List[Dict]]:
-        """Get hybrid recommendations for multiple users at once."""
-        # Get both types of recommendations in batch
-        profile_recs = [self.get_profile_based_recommendations(user, n) for user in user_dicts]
-        embedding_recs = self.get_embedding_recommendations_batch(user_dicts, n)
-
-        batch_recommendations = []
-
-        # Combine recommendations for each user
-        for profile_rec, embedding_rec in zip(profile_recs, embedding_recs):
-            combined_recs = {}
-
-            # Process profile recommendations
-            for rec in profile_rec:
-                normalized_profile_score = min(max(rec['score'], 0.0), 1.0)
-                combined_recs[rec['university_id']] = {
-                    'university_id': rec['university_id'],
-                    'name': rec['name'],
-                    'profile_score': normalized_profile_score,
-                    'embedding_score': 0,
-                    'description': rec['description']
-                }
-
-            # Process embedding recommendations
-            for rec in embedding_rec:
-                normalized_embedding_score = min(max((rec['score'] + 1) / 2, 0.0), 1.0)
-                if rec['university_id'] in combined_recs:
-                    combined_recs[rec['university_id']]['embedding_score'] = normalized_embedding_score
-                else:
-                    combined_recs[rec['university_id']] = {
-                        'university_id': rec['university_id'],
-                        'name': rec['name'],
-                        'profile_score': 0,
-                        'embedding_score': normalized_embedding_score,
-                        'description': rec['description']
-                    }
-
-            # Calculate final scores
-            profile_weight = 0.6
-            embedding_weight = 0.4
-            recommendations = []
-
-            for uni_id, rec in combined_recs.items():
-                final_score = (rec['profile_score'] * profile_weight) + (rec['embedding_score'] * embedding_weight)
-
-                recommendations.append({
-                    'university_id': uni_id,
-                    'name': rec['name'],
-                    'score': final_score,
-                    'profile_match': min(rec['profile_score'] * 100, 100),
-                    'semantic_match': min(rec['embedding_score'] * 100, 100),
-                    'description': rec['description'],
-                    'algorithm': 'hybrid'
-                })
-
-            # Sort and get top n recommendations
-            user_recommendations = sorted(recommendations, key=lambda x: x['score'], reverse=True)[:n]
-            batch_recommendations.append(user_recommendations)
-
-        return batch_recommendations
 
     def _analyze_university_compatibility(self, user_data: Dict, university: Dict) -> Dict:
         """Analyze compatibility between user and university on different factors.
@@ -967,22 +720,20 @@ class UniversityRecommender:
                 'ccas': user_data.get('ccas', [])
             }
 
-            profile_text = self._create_profile_text(formatted_user)
-            preferences_text = self._create_preferences_text(formatted_user)
+            # Get user embeddings using embedding_manager
+            user_embeddings = self.embedding_manager.get_user_embeddings(formatted_user)
 
-            # Get embeddings
-            profile_embedding = self._get_embedding(profile_text)
-            preferences_embedding = self._get_embedding(preferences_text)
-            uni_embedding = self._get_embedding(university['description'])
+            # Get university embedding using embedding_manager
+            uni_embedding = self.embedding_manager.get_university_embedding(university['description'])
 
             # Calculate similarity
-            pref_similarity = 1 - cosine(preferences_embedding, uni_embedding)
-            profile_similarity = 1 - cosine(profile_embedding, uni_embedding)
+            pref_similarity = 1 - cosine(user_embeddings['preferences'], uni_embedding)
+            profile_similarity = 1 - cosine(user_embeddings['profile'], uni_embedding)
             semantic_similarity = 0.7 * pref_similarity + 0.3 * profile_similarity
         except Exception as e:
             logger.error(f"Error calculating semantic similarity: {e}")
 
-        # Prepare explanation
+        # Rest of the explanation code...
         explanation = {
             'university_id': university_id,
             'name': university['name'],
@@ -995,39 +746,11 @@ class UniversityRecommender:
             'considerations': []
         }
 
-        # Identify strengths
-        if user_data.get('learning_style') in university.get('learning_styles', {}):
-            explanation['strengths'].append(
-                f"Learning style match: The university has many {user_data['learning_style']} learners")
-
-        if user_data.get('personality') in university.get('personality_distribution', {}):
-            explanation['strengths'].append(
-                f"Personality match: The university has many {user_data['personality']} students")
-
-        if user_data.get('career_goal') in university.get('top_career_goals', []):
-            explanation['strengths'].append(
-                f"Career goal alignment: Many students aim for careers as {user_data['career_goal']}")
-
-        # Check importance alignments
-        for factor, label in [
-            ('culture_importance', 'campus culture'),
-            ('internship_importance', 'internship opportunities'),
-            ('ranking_influence', 'university rankings'),
-            ('extracurricular_importance', 'extracurricular activities')
-        ]:
-            user_value = user_data.get(factor)
-            uni_value = university.get(f"avg_{factor}")
-            if user_value is not None and uni_value is not None:
-                if user_value > 7 and uni_value > 7:
-                    explanation['strengths'].append(f"Strong alignment on {label} importance")
-                elif abs(user_value - uni_value) > 3 and user_value > 7:
-                    explanation['considerations'].append(
-                        f"You value {label} highly, but students at this university typically don't")
-
+        # Add strengths and considerations...
         return explanation
 
     def retrain_svd_model(self):
         """Retrain the SVD model with latest data"""
         logger.info("Retraining SVD recommender model...")
-        self.svd_recommender = SVDRecommender(self.data)
+        self.svd_recommender = SVDRecommender(self.data, self.user_profiles)
         logger.info("SVD model retraining complete")
