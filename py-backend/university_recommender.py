@@ -5,7 +5,6 @@ This system recommends universities to prospective students based on similarity 
 considering personality, learning preferences, academic interests, career goals, and other factors.
 """
 
-import json
 import logging
 import os
 from ast import literal_eval
@@ -18,6 +17,7 @@ from scipy.spatial.distance import cosine
 from supabase import create_client
 
 from data_pipeline.svd_recommender import SVDRecommender
+from data_pipeline.text_embedder import TextEmbedder
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,7 +32,8 @@ SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 class UniversityRecommender:
     """University recommendation system based on student profile similarity and preferences."""
 
-    def __init__(self, data_path: str = "./data/analysis_ready_survey_data.csv"):
+    def __init__(self, data_path: str = "./data/analysis_ready_survey_data.csv",
+                 embedding_model: str = 'all-MiniLM-L6-v2'):
         """Initialize the recommender system.
 
         Args:
@@ -49,6 +50,9 @@ class UniversityRecommender:
 
         # Initialize SVD recommender
         self.svd_recommender = SVDRecommender(self.data)
+
+        # Initialize TextEmbedder
+        self.text_embedder = TextEmbedder(embedding_model)
 
         logger.info(f"Loaded {len(self.data)} student records")
         logger.info(f"Found {len(self.universities)} universities")
@@ -410,17 +414,7 @@ class UniversityRecommender:
             return self.embeddings_cache[text]
 
         try:
-            # Call the Supabase edge function for embedding generation
-            response = self.supabase.functions.invoke(
-                "embed",
-                invoke_options={
-                    "body": {'texts': [text], 'batchMode': False},
-                }
-            )
-
-            # Parse the response
-            response_data = json.loads(response.decode('utf-8'))
-            embedding = np.array(response_data['embeddings'][0])
+            embedding = self.text_embedder.encode(text)
 
             # Normalize the vector if needed
             if np.linalg.norm(embedding) > 0:

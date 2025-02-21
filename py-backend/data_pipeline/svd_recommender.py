@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import OneHotEncoder
 from surprise import Dataset, Reader, SVD
+
+from data_pipeline.text_embedder import TextEmbedder
 
 
 class SVDRecommender:
@@ -15,7 +16,7 @@ class SVDRecommender:
             data_df (pd.DataFrame): DataFrame with student survey data
         """
         self.data_df = data_df
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.text_embedder = TextEmbedder('all-MiniLM-L6-v2')
         self.svd_model = None
         self.users_encoded = None
         self.universities = list(data_df['university'].unique())
@@ -54,9 +55,7 @@ class SVDRecommender:
             # Create a combined text for embedding
             combined_text = f"{criteria} {ccas}".strip()
             if combined_text:
-                embedding = self.embedding_model.encode(combined_text)
-                # Reduce dimensionality for practical purposes
-                embedding = embedding[:20]  # Use first 20 dimensions
+                embedding = self.text_embedder.encode(combined_text, 20)
             else:
                 embedding = np.zeros(20)  # Default empty embedding
 
@@ -147,7 +146,7 @@ class SVDRecommender:
         combined_text = f"{criteria} {ccas}".strip()
 
         if combined_text:
-            text_embedding = self.embedding_model.encode(combined_text)[:20]
+            text_embedding = self.text_embedder.encode(combined_text)[:20]
         else:
             text_embedding = np.zeros(20)
 
