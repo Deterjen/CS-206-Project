@@ -9,7 +9,7 @@ from data_pipeline.text_embedder import TextEmbedder
 class SVDRecommender:
     """SVD-based collaborative filtering recommender using Surprise library"""
 
-    def __init__(self, data_df, batch_size=32):
+    def __init__(self, data_df, batch_size=128):
         """Initialize the SVD recommender with training data
 
         Args:
@@ -27,7 +27,7 @@ class SVDRecommender:
         self._train_svd_model()
 
     def _prepare_training_data(self):
-        """Prepare training data by encoding categorical features and creating user profiles"""
+        """Prepare training data by encoding categorical features and creating user profiles with batch processing"""
         # Extract features for encoding
         categorical_features = ['age', 'gender', 'student_status', 'learning_style',
                                 'preferred_population', 'residence', 'personality',
@@ -41,30 +41,56 @@ class SVDRecommender:
             columns=encoder.get_feature_names_out(categorical_features)
         )
 
-        # Process list columns using text embeddings
-        list_embeddings = []
+        # Process list columns using batch text embeddings
+        texts_to_embed = []
+        row_mapping = []  # Keep track of which row each text belongs to
+
         for idx, row in self.data_df.iterrows():
             # Convert selection criteria and CCAs to strings
-            criteria = ' '.join(eval(row['selection_criteria_list'])
-                                if isinstance(row['selection_criteria_list'], str)
-                                else row['selection_criteria_list'] or [])
+            criteria = []
+            if isinstance(row['selection_criteria_list'], str):
+                try:
+                    criteria = eval(row['selection_criteria_list'])
+                except:
+                    criteria = []
+            elif isinstance(row['selection_criteria_list'], list):
+                criteria = row['selection_criteria_list']
 
-            ccas = ' '.join(eval(row['cca_list'])
-                            if isinstance(row['cca_list'], str)
-                            else row['cca_list'] or [])
+            ccas = []
+            if isinstance(row['cca_list'], str):
+                try:
+                    ccas = eval(row['cca_list'])
+                except:
+                    ccas = []
+            elif isinstance(row['cca_list'], list):
+                ccas = row['cca_list']
 
             # Create a combined text for embedding
-            combined_text = f"{criteria} {ccas}".strip()
-            if combined_text:
-                embedding = self.text_embedder.encode(combined_text, 20)
-            else:
-                embedding = np.zeros(20)  # Default empty embedding
+            criteria_text = ' '.join(criteria) if criteria else ''
+            ccas_text = ' '.join(ccas) if ccas else ''
+            combined_text = f"{criteria_text} {ccas_text}".strip()
 
-            list_embeddings.append(embedding)
+            texts_to_embed.append(combined_text if combined_text else "empty")
+            row_mapping.append(idx)
+
+        # Process embeddings in batches
+        list_embeddings = []
+        batch_size = 32
+
+        for i in range(0, len(texts_to_embed), batch_size):
+            batch_texts = texts_to_embed[i:i + batch_size]
+            try:
+                batch_embeddings = self.text_embedder.encode(batch_texts, 20)
+                list_embeddings.extend(batch_embeddings)
+            except Exception as e:
+                logger.error(f"Error in batch embedding generation for batch {i // batch_size}: {e}")
+                # Fill failed embeddings with zeros
+                list_embeddings.extend([np.zeros(20) for _ in batch_texts])
 
         # Convert embeddings to DataFrame
         embedding_df = pd.DataFrame(
             list_embeddings,
+            index=row_mapping,
             columns=[f'text_embedding_{i}' for i in range(20)]
         )
 

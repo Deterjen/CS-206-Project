@@ -332,12 +332,12 @@ def main():
     # Generate profiles for each university
     university_profiles = {}
     profile_counts = {
-        'NUS': 500,
-        'NTU': 500,
-        'SMU': 500,
-        'SUTD': 500,
-        'SIT': 500,
-        'SUSS': 500
+        'NUS': 250,
+        'NTU': 250,
+        'SMU': 250,
+        'SUTD': 250,
+        'SIT': 250,
+        'SUSS': 250
     }
 
     for university, count in profile_counts.items():

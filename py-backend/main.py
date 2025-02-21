@@ -7,8 +7,8 @@ def main():
     print("=============================================")
 
     # Initialize the recommender
-    recommender = UniversityRecommender('./data/analysis_ready_survey_data.csv')
-    # recommender = UniversityRecommender('./data/synthetic_data/all_profiles.csv')
+    # recommender = UniversityRecommender('./data/analysis_ready_survey_data.csv')
+    recommender = UniversityRecommender('./data/synthetic_data/all_profiles.csv')
     print(f"Loaded recommender with {len(recommender.universities)} universities")
 
     # Create an example user
