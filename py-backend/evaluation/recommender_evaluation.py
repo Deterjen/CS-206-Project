@@ -1,6 +1,8 @@
+import concurrent.futures
 import logging
 import os
 import tempfile
+from typing import List, Dict
 from typing import Tuple
 
 import numpy as np
@@ -51,40 +53,71 @@ class RecommenderEvaluator:
 
         return train_data, test_data
 
-    from typing import List, Dict
-    import pandas as pd
-
-    def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5) -> Dict:
+    def evaluate_batch(self, batch_data: pd.DataFrame, methods: Dict, k: int) -> Dict:
         """
-        Evaluate recommendations using various metrics
+        Evaluate a batch of test data and return aggregated metrics for the batch
+
+        Returns:
+            Dict containing batch metrics and recommendations for each method
+        """
+        batch_metrics = {
+            method_name: {
+                'ndcg': [],
+                'precision': [],
+                'recall': [],
+                'diversity': [],
+                'recommendations': [],  # Store all recommendations for coverage/personalization
+                'predicted_universities': set()  # Store unique universities for coverage
+            }
+            for method_name in methods
+        }
+
+        # Process each user in the batch
+        for idx, user in batch_data.iterrows():
+            user_dict = user.drop('university').to_dict()
+            actual_university = user['university']
+
+            # Try each recommendation method
+            for method_name, recommender_method in methods.items():
+                try:
+                    # Get recommendations
+                    recommendations = recommender_method(user_dict, k)
+                    predicted_universities = [rec['name'] for rec in recommendations]
+
+                    # Store recommendations for batch
+                    batch_metrics[method_name]['recommendations'].append(predicted_universities)
+                    batch_metrics[method_name]['predicted_universities'].update(predicted_universities)
+
+                    # Calculate relevance metrics
+                    relevance = [1 if uni == actual_university else 0 for uni in predicted_universities]
+
+                    # Update batch metrics
+                    if sum(relevance) > 0:
+                        batch_metrics[method_name]['ndcg'].append(self._calculate_ndcg(relevance))
+
+                    precision = 1 if actual_university in predicted_universities else 0
+                    batch_metrics[method_name]['precision'].append(precision)
+                    batch_metrics[method_name]['recall'].append(precision)
+                    batch_metrics[method_name]['diversity'].append(self._calculate_diversity(recommendations))
+
+                except Exception as e:
+                    logger.warning(f"Error with {method_name} recommendations for user {idx}: {str(e)}")
+                    continue
+
+        return batch_metrics
+
+    def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5, n_workers: int = 4,
+                                 batch_size: int = 32) -> Dict:
+        """
+        Evaluate recommendations using parallel processing with fixed race conditions
         """
         if self.recommender is None:
             raise ValueError("Recommender not initialized. Run prepare_train_test_split first.")
 
-        # Initialize metrics
-        metrics = {
-            'profile_based': {
-                'ndcg': [], 'precision': [], 'recall': [],
-                'diversity': [], 'coverage': set(), 'personalization': []
-            },
-            'embedding': {
-                'ndcg': [], 'precision': [], 'recall': [],
-                'diversity': [], 'coverage': set(), 'personalization': []
-            },
-            'hybrid': {
-                'ndcg': [], 'precision': [], 'recall': [],
-                'diversity': [], 'coverage': set(), 'personalization': []
-            }
-        }
-
-        # Precompute embeddings for test data with progress bar
+        # Precompute embeddings for test data
         logger.info("Precomputing embeddings for test data...")
         self.recommender.embedding_manager.precompute_embeddings(test_data, self.recommender.universities)
         logger.info("Finished precomputing test data embeddings")
-
-        # Use only universities from training data for coverage calculation
-        train_universities = set(uni['name'] for uni in self.recommender.universities)
-        all_recommendations = []
 
         # Define methods to evaluate
         methods = {
@@ -93,81 +126,75 @@ class RecommenderEvaluator:
             'hybrid': self.recommender.get_hybrid_recommendations
         }
 
-        # Create progress bar for test data evaluation
-        total_iterations = len(test_data) * len(methods)
-        with tqdm(total=total_iterations, desc="Evaluating recommendations") as pbar:
-            # Evaluate each test user
-            for idx, user in test_data.iterrows():
-                # Convert row to dictionary, excluding the actual university
-                user_dict = user.drop('university').to_dict()
-                actual_university = user['university']
+        # Create batches
+        n_samples = len(test_data)
+        n_batches = (n_samples + batch_size - 1) // batch_size
 
-                # Initialize recommendations storage for this iteration
-                current_recommendations = {method: [] for method in methods.keys()}
+        # Initialize metrics storage for final aggregation
+        all_metrics = {
+            method_name: {
+                'ndcg': [],
+                'precision': [],
+                'recall': [],
+                'diversity': [],
+                'all_recommendations': [],  # For personalization calculation
+                'coverage': set()  # For coverage calculation
+            }
+            for method_name in methods
+        }
 
-                # Try each recommendation method
-                for method_name, recommender_method in methods.items():
+        # Process batches in parallel
+        with tqdm(total=n_batches, desc="Processing batches") as pbar:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as executor:
+                # Create batch tasks
+                future_to_batch = {}
+                for i in range(0, n_samples, batch_size):
+                    batch = test_data.iloc[i:i + batch_size]
+                    future = executor.submit(self.evaluate_batch, batch, methods, k)
+                    future_to_batch[future] = i // batch_size
+
+                # Process completed batches
+                for future in concurrent.futures.as_completed(future_to_batch):
+                    batch_idx = future_to_batch[future]
                     try:
-                        recommendations = recommender_method(user_dict, k)
+                        batch_metrics = future.result()
 
-                        # Store recommendations for personalization calculation
-                        current_recommendations[method_name] = [rec['name'] for rec in recommendations]
+                        # Aggregate batch results into final metrics
+                        for method_name, method_metrics in batch_metrics.items():
+                            all_metrics[method_name]['ndcg'].extend(method_metrics['ndcg'])
+                            all_metrics[method_name]['precision'].extend(method_metrics['precision'])
+                            all_metrics[method_name]['recall'].extend(method_metrics['recall'])
+                            all_metrics[method_name]['diversity'].extend(method_metrics['diversity'])
+                            all_metrics[method_name]['all_recommendations'].extend(method_metrics['recommendations'])
+                            all_metrics[method_name]['coverage'].update(method_metrics['predicted_universities'])
 
-                        # Update coverage
-                        metrics[method_name]['coverage'].update(current_recommendations[method_name])
-
-                        # Calculate relevance metrics
-                        relevance = [1 if uni == actual_university else 0 for uni in
-                                     current_recommendations[method_name]]
-                        if sum(relevance) > 0:
-                            metrics[method_name]['ndcg'].append(self._calculate_ndcg(relevance))
-
-                        # Precision and Recall
-                        precision = 1 if actual_university in current_recommendations[method_name] else 0
-                        metrics[method_name]['precision'].append(precision)
-                        metrics[method_name]['recall'].append(precision)
-
-                        # Calculate diversity
-                        metrics[method_name]['diversity'].append(self._calculate_diversity(recommendations))
+                        pbar.update(1)
+                        pbar.set_postfix({'batch': f"{batch_idx + 1}/{n_batches}"})
 
                     except Exception as e:
-                        self.logger.warning(f"Error with {method_name} recommendations for user {idx}: {str(e)}")
+                        logger.error(f"Error processing batch {batch_idx}: {str(e)}")
 
-                    # Update progress bar
-                    pbar.update(1)
-                    pbar.set_postfix({
-                        'method': method_name,
-                        'user': idx
-                    })
-
-                # Store recommendations for personalization calculation
-                for method_name in methods:
-                    if current_recommendations[method_name]:
-                        all_recommendations.append({
-                            'method': method_name,
-                            'recommendations': current_recommendations[method_name]
-                        })
-
-        # Calculate final metrics
+        # Calculate final evaluation metrics
+        train_universities = set(uni['name'] for uni in self.recommender.universities)
         evaluation_results = {}
-        for method_name in methods:
-            method_metrics = metrics[method_name]
 
-            # Calculate personalization
-            method_recommendations = [r['recommendations'] for r in all_recommendations if r['method'] == method_name]
-            method_metrics['personalization'] = self._calculate_personalization(method_recommendations)
+        for method_name in methods:
+            method_metrics = all_metrics[method_name]
+
+            # Calculate personalization score
+            personalization = self._calculate_personalization(method_metrics['all_recommendations'])
 
             # Calculate coverage percentage
             coverage_percentage = len(method_metrics['coverage']) / len(train_universities) * 100
 
-            # Aggregate metrics
+            # Aggregate final metrics
             evaluation_results[method_name] = {
                 'ndcg@k': np.mean(method_metrics['ndcg']) if method_metrics['ndcg'] else 0,
                 'precision@k': np.mean(method_metrics['precision']) if method_metrics['precision'] else 0,
                 'recall@k': np.mean(method_metrics['recall']) if method_metrics['recall'] else 0,
                 'diversity': np.mean(method_metrics['diversity']) if method_metrics['diversity'] else 0,
                 'coverage_percentage': coverage_percentage,
-                'personalization': method_metrics['personalization']
+                'personalization': personalization
             }
 
         return evaluation_results
