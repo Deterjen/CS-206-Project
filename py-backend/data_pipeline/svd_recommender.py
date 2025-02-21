@@ -2,184 +2,208 @@ from typing import Dict, List
 
 import numpy as np
 import pandas as pd
+from scipy.spatial.distance import cosine
 from sklearn.preprocessing import StandardScaler
-from surprise import Dataset, Reader, SVD
-from surprise.model_selection import GridSearchCV
+
+from data_pipeline.user_profile_embedding_manager import embedding_manager
 
 
 class SVDRecommender:
-    """Enhanced SVD-based collaborative filtering recommender"""
+    """SVD-based recommender using embeddings for university recommendations"""
 
-    def __init__(self, data_df: pd.DataFrame, batch_size: int = 128):
-        """Initialize the improved SVD recommender with training data
+    def __init__(self, data_df: pd.DataFrame, n_components: int = 50, batch_size: int = 128):
+        """Initialize the SVD recommender with training data
 
         Args:
             data_df (pd.DataFrame): DataFrame with student survey data
-            batch_size (int): Batch size for processing
+            n_components (int): Number of SVD components to keep
+            batch_size (int): Batch size for processing embeddings
         """
-        self.batch_size = batch_size
         self.data_df = data_df
+        self.n_components = n_components
+        self.batch_size = batch_size
+        self.embedding_manager = embedding_manager
+        self.universities = list(data_df['university'].unique())
+
+        # Initialize embeddings and SVD model
+        self._prepare_embedding_data()
+        self._train_svd_model()
+
+    def _prepare_embedding_data(self):
+        """Prepare embedding data for SVD training using existing embedding manager"""
+        print("Preparing embedding data...")
+
+        # Process in batches
+        total_rows = len(self.data_df)
+        combined_embeddings = []
+
+        for start_idx in range(0, total_rows, self.batch_size):
+            end_idx = min(start_idx + self.batch_size, total_rows)
+            batch_df = self.data_df.iloc[start_idx:end_idx]
+
+            for _, row in batch_df.iterrows():
+                # Use embedding manager to get embeddings
+                embeddings = self.embedding_manager.get_user_embeddings(row.to_dict())
+                # Use only profile embeddings for consistency
+                combined_embeddings.append(embeddings['profile'])
+
+            print(f"Processed {end_idx}/{total_rows} profiles")
+
+        # Convert to numpy array
+        self.combined_embeddings = np.array(combined_embeddings)
+
+        # Scale the embeddings
         self.scaler = StandardScaler()
-        self.svd_model = None
-        self.feature_importances = {}
-        self.confidence_scores = {}
+        self.scaled_embeddings = self.scaler.fit_transform(self.combined_embeddings)
 
-        # Initialize and train the model
-        self._prepare_training_data()
-        self._tune_and_train_svd_model()
+        # Get university embeddings
+        print("Getting university embeddings...")
+        self.university_embeddings = {}
 
-    def _prepare_training_data(self):
-        """Prepare training data with improved feature engineering"""
-        # Extract and normalize numerical features
-        numerical_features = [
-            'cost_importance', 'culture_importance', 'internship_importance',
-            'ranking_influence', 'extracurricular_importance', 'leadership_role',
-            'extracurricular_hours'
-        ]
+        for uni in self.universities:
+            uni_embedding = self.embedding_manager.get_university_embedding(
+                uni.lower().replace(' ', '_'),
+                self._get_university_description(uni)
+            )
+            # Ensure university embedding has same dimensions
+            self.university_embeddings[uni] = uni_embedding
 
-        # Scale numerical features
-        scaled_features = self.scaler.fit_transform(self.data_df[numerical_features])
-        self.scaled_df = pd.DataFrame(
-            scaled_features,
-            columns=numerical_features,
-            index=self.data_df.index
+        print("Embedding data preparation complete")
+
+    def _get_user_transformed_embedding(self, user_data: Dict) -> np.ndarray:
+        """Get transformed embedding for a user in SVD space"""
+        # Get user embeddings using embedding manager
+        embeddings = self.embedding_manager.get_user_embeddings(user_data)
+        # Use only profile embeddings for consistency with university embeddings
+        profile_embedding = embeddings['profile']
+
+        # Scale and transform
+        scaled = self.scaler.transform(profile_embedding.reshape(1, -1))
+        transformed = scaled @ self.Vt.T @ np.diag(1 / self.s)
+
+        return transformed.flatten()
+
+    def _train_svd_model(self):
+        """Train SVD model on the prepared embeddings"""
+        print("Training SVD model...")
+
+        # Apply SVD to the scaled embeddings
+        U, s, Vt = np.linalg.svd(self.scaled_embeddings, full_matrices=False)
+
+        # Keep top components
+        self.n_components = min(self.n_components, len(s))
+        self.U = U[:, :self.n_components]
+        self.s = s[:self.n_components]
+        self.Vt = Vt[:self.n_components, :]
+
+        # Store transformed embeddings
+        self.transformed_embeddings = self.U @ np.diag(self.s)
+
+        # Transform university embeddings
+        self.transformed_universities = {}
+        for uni_name, uni_embedding in self.university_embeddings.items():
+            # Scale the university embedding
+            scaled_uni = self.scaler.transform(uni_embedding.reshape(1, -1))
+            # Project into SVD space
+            transformed_uni = scaled_uni @ self.Vt.T @ np.diag(1 / self.s)
+            self.transformed_universities[uni_name] = transformed_uni.flatten()
+
+        print("SVD model training complete")
+
+    def _get_university_description(self, university: str) -> str:
+        """Get university description for embedding generation"""
+        uni_data = self.data_df[self.data_df['university'] == university]
+
+        if len(uni_data) == 0:
+            return f"University {university}"
+
+        # Calculate key metrics
+        avg_satisfaction = uni_data['satisfaction_rating'].mean()
+        top_schools = uni_data['school'].value_counts().nlargest(3).index.tolist()
+        learning_styles = uni_data['learning_style'].value_counts()
+        top_style = learning_styles.index[0] if not learning_styles.empty else "varied"
+
+        # Create description
+        description = (
+            f"{university} university has an average satisfaction rating of {avg_satisfaction:.1f}/5. "
+            f"Known for {top_style} learning environment. "
+            f"Strong programs in {', '.join(top_schools)}. "
         )
 
-        # Calculate feature importance based on correlation with satisfaction
-        for feature in numerical_features:
-            correlation = np.abs(np.corrcoef(
-                self.data_df[feature],
-                self.data_df['satisfaction_rating']
-            )[0, 1])
-            self.feature_importances[feature] = correlation
+        return description
 
-        # Normalize feature importances
-        total_importance = sum(self.feature_importances.values())
-        self.feature_importances = {
-            k: v / total_importance
-            for k, v in self.feature_importances.items()
-        }
+    def get_similar_universities(self, user_data: Dict, n: int = 5) -> List[Dict]:
+        """Get similar universities using SVD-transformed embeddings"""
+        try:
+            # Get user transformed embedding
+            user_transformed = self._get_user_transformed_embedding(user_data)
 
-        # Prepare interaction data with confidence scores
-        self.interactions = []
-        for idx, row in self.data_df.iterrows():
-            user_id = f"student_{idx}"
-            university = row['university']
-            rating = row['satisfaction_rating']
+            # Calculate similarities with universities
+            similarities = []
+            for uni_name, uni_transformed in self.transformed_universities.items():
+                similarity = 1 - cosine(user_transformed, uni_transformed)
 
-            # Calculate confidence score based on feature completeness
-            confidence = self._calculate_confidence_score(row)
-            self.confidence_scores[(user_id, university)] = confidence
-
-            if pd.notna(rating):
-                self.interactions.append({
-                    'user': user_id,
-                    'university': university,
-                    'rating': rating,
-                    'confidence': confidence
+                similarities.append({
+                    'university_id': uni_name.lower().replace(' ', '_'),
+                    'name': uni_name,
+                    'score': similarity,
+                    'description': self._get_university_description(uni_name),
+                    'avg_satisfaction': self.data_df[
+                        self.data_df['university'] == uni_name
+                        ]['satisfaction_rating'].mean()
                 })
 
-    def _calculate_confidence_score(self, user_data: pd.Series) -> float:
-        """Calculate confidence score for a user's ratings based on data completeness"""
-        # Check completeness of important fields
-        important_fields = [
-            'learning_style', 'school', 'career_goal', 'preferred_population',
-            'cost_importance', 'culture_importance', 'internship_importance'
-        ]
+            # Sort by similarity and return top n
+            recommendations = sorted(similarities, key=lambda x: x['score'], reverse=True)[:n]
 
-        # Calculate basic completeness score
-        completeness = sum(1 for field in important_fields if pd.notna(user_data.get(field))) / len(important_fields)
+            # Add confidence scores
+            max_score = max(r['score'] for r in recommendations)
+            min_score = min(r['score'] for r in recommendations)
+            score_range = max_score - min_score if max_score > min_score else 1
 
-        # Add bonus for engagement indicators
-        engagement_bonus = 0
-        if user_data.get('leadership_role') == 1:
-            engagement_bonus += 0.1
-        if user_data.get('extracurricular_hours', 0) > 5:
-            engagement_bonus += 0.1
-        if user_data.get('cca_count', 0) > 2:
-            engagement_bonus += 0.1
+            for rec in recommendations:
+                rec['confidence'] = ((rec['score'] - min_score) / score_range) * 100
 
-        # Final confidence score (between 0 and 1)
-        confidence = min(completeness + engagement_bonus, 1.0)
-        return confidence
+            return recommendations
 
-    def _tune_and_train_svd_model(self):
-        """Tune SVD parameters using cross-validation and train final model"""
-        # Prepare data for Surprise
-        reader = Reader(rating_scale=(1, 5))
-        data = Dataset.load_from_df(
-            pd.DataFrame(self.interactions)[['user', 'university', 'rating']],
-            reader
-        )
+        except Exception as e:
+            print(f"Error in get_similar_universities: {str(e)}")
+            return []
 
-        # Define parameter grid
-        param_grid = {
-            'n_epochs': [20, 30, 40],
-            'lr_all': [0.002, 0.005, 0.007],
-            'reg_all': [0.02, 0.04, 0.06],
-            'n_factors': [20, 30, 40]
-        }
+    def find_similar_profiles(self, user_data: Dict, n: int = 5) -> List[Dict]:
+        """Find similar student profiles using SVD-transformed embeddings"""
+        try:
+            # Get user transformed embedding
+            user_transformed = self._get_user_transformed_embedding(user_data)
 
-        # Perform grid search with cross-validation
-        gs = GridSearchCV(SVD, param_grid, measures=['rmse', 'mae'], cv=5)
-        gs.fit(data)
+            # Calculate similarities with all profiles
+            similarities = []
+            for i, profile_transformed in enumerate(self.transformed_embeddings):
+                similarity = 1 - cosine(user_transformed, profile_transformed)
+                profile_data = self.data_df.iloc[i]
 
-        # Get best parameters
-        best_params = gs.best_params['rmse']
+                similarities.append({
+                    'profile_id': f"student_{i}",
+                    'university': profile_data['university'],
+                    'satisfaction': profile_data['satisfaction_rating'],
+                    'similarity': similarity,
+                    'school': profile_data['school'],
+                    'career_goal': profile_data['career_goal']
+                })
 
-        # Train final model with best parameters
-        trainset = data.build_full_trainset()
-        self.svd_model = SVD(
-            n_factors=best_params['n_factors'],
-            n_epochs=best_params['n_epochs'],
-            lr_all=best_params['lr_all'],
-            reg_all=best_params['reg_all']
-        )
-        self.svd_model.fit(trainset)
+            # Sort by similarity and return top n
+            similar_profiles = sorted(similarities, key=lambda x: x['similarity'], reverse=True)[:n]
 
-        # Store cross-validation scores
-        self.cv_rmse = gs.best_score['rmse']
-        self.cv_mae = gs.best_score['mae']
+            # Add match percentage
+            max_sim = max(p['similarity'] for p in similar_profiles)
+            min_sim = min(p['similarity'] for p in similar_profiles)
+            sim_range = max_sim - min_sim if max_sim > min_sim else 1
 
-    def predict_ratings(self, user_id: str, universities: List[str] = None) -> List[Dict]:
-        """Predict user ratings for universities with confidence scores
+            for profile in similar_profiles:
+                profile['match_percentage'] = ((profile['similarity'] - min_sim) / sim_range) * 100
 
-        Args:
-            user_id (str): User ID
-            universities (list): List of universities to predict ratings for
+            return similar_profiles
 
-        Returns:
-            list: Predicted ratings with confidence scores
-        """
-        if universities is None:
-            universities = self.data_df['university'].unique()
-
-        predictions = []
-        for uni in universities:
-            # Get base prediction from SVD
-            pred = self.svd_model.predict(user_id, uni)
-
-            # Get confidence score
-            confidence = self.confidence_scores.get((user_id, uni), 0.5)
-
-            # Adjust prediction based on confidence
-            adjusted_rating = pred.est * confidence + 3.0 * (1 - confidence)
-
-            predictions.append({
-                'university': uni,
-                'predicted_rating': adjusted_rating,
-                'base_prediction': pred.est,
-                'confidence': confidence,
-                'details': pred
-            })
-
-        return sorted(predictions, key=lambda x: x['predicted_rating'], reverse=True)
-
-    def get_model_metrics(self) -> Dict:
-        """Get model performance metrics"""
-        return {
-            'cv_rmse': self.cv_rmse,
-            'cv_mae': self.cv_mae,
-            'feature_importances': self.feature_importances,
-            'average_confidence': np.mean(list(self.confidence_scores.values()))
-        }
+        except Exception as e:
+            print(f"Error in find_similar_profiles: {str(e)}")
+            return []
