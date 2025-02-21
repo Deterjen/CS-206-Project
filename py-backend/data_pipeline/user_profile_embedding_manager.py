@@ -119,7 +119,7 @@ class UserProfileEmbeddingManager:
             'ccas': user_data.get('ccas', [])
         }
 
-    def batch_get_embeddings(self, texts: List[str], batch_size: int = 128) -> Dict[str, np.ndarray]:
+    def batch_get_embeddings(self, texts: List[str], batch_size: int = 256) -> Dict[str, np.ndarray]:
         """Get embeddings for multiple texts in batches with caching."""
         # Remove duplicates while preserving order
         unique_texts = list(dict.fromkeys(texts))
