@@ -14,7 +14,7 @@ class TextEmbedder:
         Returns:
             numpy array of embeddings
         """
-        embedding = self.embedding_model.encode(text)
+        embedding = self.embedding_model.encode(texts)
         if dimension_size == -1:
             return embedding
         return embedding[:dimension_size]
