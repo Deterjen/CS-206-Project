@@ -1,13 +1,18 @@
 import logging
 import os
 import tempfile
-from typing import List, Dict, Tuple
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 from university_recommender import UniversityRecommender
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class RecommenderEvaluator:
@@ -46,20 +51,17 @@ class RecommenderEvaluator:
 
         return train_data, test_data
 
+    from typing import List, Dict
+    import pandas as pd
+
     def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5) -> Dict:
         """
         Evaluate recommendations using various metrics
-
-        Args:
-            test_data: Test dataset
-            k: Number of recommendations to generate
-
-        Returns:
-            Dictionary containing evaluation metrics
         """
         if self.recommender is None:
             raise ValueError("Recommender not initialized. Run prepare_train_test_split first.")
 
+        # Initialize metrics
         metrics = {
             'profile_based': {
                 'ndcg': [], 'precision': [], 'recall': [],
@@ -75,75 +77,90 @@ class RecommenderEvaluator:
             }
         }
 
+        # Precompute embeddings for test data with progress bar
+        logger.info("Precomputing embeddings for test data...")
+        self.recommender.embedding_manager.precompute_embeddings(test_data, self.recommender.universities)
+        logger.info("Finished precomputing test data embeddings")
+
         # Use only universities from training data for coverage calculation
         train_universities = set(uni['name'] for uni in self.recommender.universities)
         all_recommendations = []
 
-        # Evaluate each test user
-        for idx, user in test_data.iterrows():
-            # Convert row to dictionary, excluding the actual university
-            user_dict = user.drop('university').to_dict()
+        # Define methods to evaluate
+        methods = {
+            'profile_based': self.recommender.get_profile_based_recommendations,
+            'embedding': self.recommender.get_embedding_recommendations,
+            'hybrid': self.recommender.get_hybrid_recommendations
+        }
 
-            # Get recommendations using different methods
-            try:
-                methods = {
-                    'profile_based': self.recommender.get_profile_based_recommendations,
-                    'embedding': self.recommender.get_embedding_recommendations,
-                    'hybrid': self.recommender.get_hybrid_recommendations
-                }
-
-                all_recommendations = {method: [] for method in methods.keys()}
+        # Create progress bar for test data evaluation
+        total_iterations = len(test_data) * len(methods)
+        with tqdm(total=total_iterations, desc="Evaluating recommendations") as pbar:
+            # Evaluate each test user
+            for idx, user in test_data.iterrows():
+                # Convert row to dictionary, excluding the actual university
+                user_dict = user.drop('university').to_dict()
                 actual_university = user['university']
 
+                # Initialize recommendations storage for this iteration
+                current_recommendations = {method: [] for method in methods.keys()}
+
+                # Try each recommendation method
                 for method_name, recommender_method in methods.items():
                     try:
                         recommendations = recommender_method(user_dict, k)
 
                         # Store recommendations for personalization calculation
-                        all_recommendations[method_name].append([rec['name'] for rec in recommendations])
+                        current_recommendations[method_name] = [rec['name'] for rec in recommendations]
 
                         # Update coverage
-                        metrics[method_name]['coverage'].update([rec['name'] for rec in recommendations])
+                        metrics[method_name]['coverage'].update(current_recommendations[method_name])
 
                         # Calculate relevance metrics
-                        predicted_universities = [rec['name'] for rec in recommendations]
-
-                        # NDCG calculation
-                        relevance = [1 if uni == actual_university else 0 for uni in predicted_universities]
+                        relevance = [1 if uni == actual_university else 0 for uni in
+                                     current_recommendations[method_name]]
                         if sum(relevance) > 0:
                             metrics[method_name]['ndcg'].append(self._calculate_ndcg(relevance))
 
                         # Precision and Recall
-                        precision = 1 if actual_university in predicted_universities else 0
+                        precision = 1 if actual_university in current_recommendations[method_name] else 0
                         metrics[method_name]['precision'].append(precision)
                         metrics[method_name]['recall'].append(precision)
 
-                        # Calculate diversity of recommendations
+                        # Calculate diversity
                         metrics[method_name]['diversity'].append(self._calculate_diversity(recommendations))
 
                     except Exception as e:
                         self.logger.warning(f"Error with {method_name} recommendations for user {idx}: {str(e)}")
-                        continue
 
-            except Exception as e:
-                self.logger.warning(f"Error generating recommendations for user {idx}: {str(e)}")
-                continue
+                    # Update progress bar
+                    pbar.update(1)
+                    pbar.set_postfix({
+                        'method': method_name,
+                        'user': idx
+                    })
 
-        # Calculate personalization and aggregate metrics for each method
+                # Store recommendations for personalization calculation
+                for method_name in methods:
+                    if current_recommendations[method_name]:
+                        all_recommendations.append({
+                            'method': method_name,
+                            'recommendations': current_recommendations[method_name]
+                        })
+
+        # Calculate final metrics
         evaluation_results = {}
-
-        for method_name in ['profile_based', 'embedding', 'hybrid']:
+        for method_name in methods:
             method_metrics = metrics[method_name]
 
-            # Calculate personalization for this method
-            method_metrics['personalization'] = self._calculate_personalization(
-                [recs for recs in all_recommendations[method_name] if recs]  # Filter out empty recommendations
-            )
+            # Calculate personalization
+            method_recommendations = [r['recommendations'] for r in all_recommendations if r['method'] == method_name]
+            method_metrics['personalization'] = self._calculate_personalization(method_recommendations)
 
             # Calculate coverage percentage
             coverage_percentage = len(method_metrics['coverage']) / len(train_universities) * 100
 
-            # Aggregate metrics for this method
+            # Aggregate metrics
             evaluation_results[method_name] = {
                 'ndcg@k': np.mean(method_metrics['ndcg']) if method_metrics['ndcg'] else 0,
                 'precision@k': np.mean(method_metrics['precision']) if method_metrics['precision'] else 0,
