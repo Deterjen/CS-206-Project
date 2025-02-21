@@ -9,12 +9,13 @@ from data_pipeline.text_embedder import TextEmbedder
 class SVDRecommender:
     """SVD-based collaborative filtering recommender using Surprise library"""
 
-    def __init__(self, data_df):
+    def __init__(self, data_df, batch_size=32):
         """Initialize the SVD recommender with training data
 
         Args:
             data_df (pd.DataFrame): DataFrame with student survey data
         """
+        self.batch_size = batch_size
         self.data_df = data_df
         self.text_embedder = TextEmbedder('all-MiniLM-L6-v2')
         self.svd_model = None

@@ -6,15 +6,12 @@ considering personality, learning preferences, academic interests, career goals,
 """
 
 import logging
-import os
 from ast import literal_eval
 from typing import List, Dict
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
 from scipy.spatial.distance import cosine
-from supabase import create_client
 
 from data_pipeline.svd_recommender import SVDRecommender
 from data_pipeline.text_embedder import TextEmbedder
@@ -22,11 +19,6 @@ from data_pipeline.text_embedder import TextEmbedder
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Load environment variables and initialize Supabase client
-load_dotenv('.env.local')
-SUPABASE_URL = os.environ.get('SUPABASE_URL')
-SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 
 
 class UniversityRecommender:
@@ -39,8 +31,6 @@ class UniversityRecommender:
         Args:
             data_path: Path to the survey data CSV file
         """
-        # Initialize Supabase client
-        self.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
         self.data = self._load_data(data_path)
         self.universities = self._extract_universities()
