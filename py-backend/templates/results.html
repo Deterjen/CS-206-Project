@@ -314,23 +314,23 @@
                                 <h6>Profile Match</h6>
                                 <div class="progress mb-2">
                                     <div class="progress-bar bg-success" role="progressbar"
-                                         style="width: {{ rec.profile_match * 100 }}%"
-                                         aria-valuenow="{{ rec.profile_match * 100 }}"
+                                         style="width: {{ rec.profile_match }}%"
+                                         aria-valuenow="{{ rec.profile_match }}"
                                          aria-valuemin="0" aria-valuemax="100">
                                     </div>
                                 </div>
-                                <p class="small text-center">{{ "%.0f"|format(rec.profile_match * 100) }}%</p>
+                                <p class="small text-center">{{ "%.0f"|format(rec.profile_match) }}%</p>
                             </div>
                             <div class="col-md-6">
                                 <h6>Semantic Match</h6>
                                 <div class="progress mb-2">
                                     <div class="progress-bar bg-info" role="progressbar"
-                                         style="width: {{ rec.semantic_match * 100 }}%"
-                                         aria-valuenow="{{ rec.semantic_match * 100 }}"
+                                         style="width: {{ rec.semantic_match }}%"
+                                         aria-valuenow="{{ rec.semantic_match }}"
                                          aria-valuemin="0" aria-valuemax="100">
                                     </div>
                                 </div>
-                                <p class="small text-center">{{ "%.0f"|format(rec.semantic_match * 100) }}%</p>
+                                <p class="small text-center">{{ "%.0f"|format(rec.semantic_match) }}%</p>
                             </div>
                         </div>
                     </div>

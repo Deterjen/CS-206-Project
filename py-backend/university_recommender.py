@@ -455,44 +455,39 @@ class UniversityRecommender:
 
     def get_profile_based_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
         """Get university recommendations based on SVD collaborative filtering.
-
-        Args:
-            user_data: User profile and preferences
-            n: Number of recommendations to return
-
-        Returns:
-            List of recommended universities with scores
-        """
+        Returns normalized scores between 0 and 1."""
         # Create a temporary user ID for prediction
         temp_user_id = f"temp_user_{id(user_data)}"
 
-        # Get similar profiles using our feature-based approach
+        # Get similar profiles
         similar_profiles = self._find_similar_profiles(user_data, n=10)
 
-        # Use SVD to predict ratings for all universities
+        # Use SVD to predict ratings
         predicted_ratings = self.svd_recommender.predict_ratings(temp_user_id)
 
-        # Blend the approaches - weight SVD predictions by similar user insights
+        # Initialize scores dictionary
         university_scores = {}
 
-        # First, use SVD predictions as base scores
+        # Process SVD predictions (normalize from 1-5 scale to 0-1)
         for pred in predicted_ratings:
             uni = pred['university']
+            normalized_svd_score = (pred['predicted_rating'] - 1) / 4  # Convert 1-5 to 0-1
             university_scores[uni] = {
                 'name': uni,
-                'score': pred['predicted_rating'] * 0.6,  # Base weight for SVD prediction
+                'score': normalized_svd_score * 0.6,  # Base weight for SVD prediction
                 'count': 1,
-                'svd_score': pred['predicted_rating']
+                'svd_score': normalized_svd_score
             }
 
         # Add weighted scores from similar users
         for profile in similar_profiles:
             uni = profile['university']
-            sim_score = profile['similarity']
+            sim_score = min(max(profile['similarity'], 0.0), 1.0)  # Ensure similarity is 0-1
             satisfaction = profile['satisfaction'] if profile['satisfaction'] is not None else 3
+            normalized_satisfaction = (satisfaction - 1) / 4  # Convert 1-5 to 0-1
 
             # Weight by similarity and satisfaction
-            weight = sim_score * (satisfaction / 5.0) * 0.4  # Weight for similar user component
+            weight = sim_score * normalized_satisfaction * 0.4
 
             if uni in university_scores:
                 university_scores[uni]['score'] += weight
@@ -505,13 +500,13 @@ class UniversityRecommender:
                     'svd_score': 0
                 }
 
-        # Calculate final scores
+        # Calculate final normalized scores
         recommendations = []
         for uni, data in university_scores.items():
-            # Normalize based on count
-            normalized_score = data['score'] / data['count'] if data['count'] > 0 else 0
+            # Normalize score to 0-1 range
+            final_score = min(data['score'] / data['count'], 1.0) if data['count'] > 0 else 0
 
-            # Get university description and additional info
+            # Get university info
             uni_info = next((u for u in self.universities if u['name'] == uni), None)
             description = uni_info[
                 'description'] if uni_info else f"{uni} is recommended based on collaborative filtering."
@@ -519,15 +514,14 @@ class UniversityRecommender:
             recommendations.append({
                 'university_id': uni.lower().replace(' ', '_'),
                 'name': uni,
-                'score': normalized_score,
+                'score': final_score,
                 'svd_score': data['svd_score'],
-                'match_confidence': min(normalized_score * 100, 100),  # Convert to percentage with cap
-                'similar_students_count': data['count'] - 1,  # Subtract 1 for the SVD base score
+                'match_confidence': min(final_score * 100, 100),  # Convert to percentage, capped at 100
+                'similar_students_count': data['count'] - 1,
                 'description': description,
                 'algorithm': 'svd_collaborative_filtering'
             })
 
-        # Sort by score and return top n
         return sorted(recommendations, key=lambda x: x['score'], reverse=True)[:n]
 
     def get_embedding_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
@@ -612,7 +606,8 @@ class UniversityRecommender:
         return sorted(similarities, key=lambda x: x['score'], reverse=True)[:n]
 
     def get_hybrid_recommendations(self, user_data: Dict, n: int = 5) -> List[Dict]:
-        """Get recommendations using a hybrid approach combining profile matching and embeddings."""
+        """Get recommendations using a hybrid approach combining profile matching and embeddings.
+        Returns normalized scores between 0 and 1."""
         # Get profile-based recommendations
         profile_recs = self.get_profile_based_recommendations(user_data, n=n)
 
@@ -622,14 +617,10 @@ class UniversityRecommender:
         # Combine recommendations
         combined_recs = {}
 
-        # Find max scores to normalize
-        max_profile_score = max([rec['score'] for rec in profile_recs]) if profile_recs else 1.0
-        max_embedding_score = max([rec['score'] for rec in embedding_recs]) if embedding_recs else 1.0
-
         # Process profile recommendations
         for rec in profile_recs:
-            # Normalize profile score to 0-1 range
-            normalized_profile_score = min(rec['score'] / max_profile_score, 1.0) if max_profile_score > 0 else 0
+            # Normalize score to 0-1 range (assuming 5-point scale for satisfaction)
+            normalized_profile_score = min(max(rec['score'] / 5.0, 0.0), 1.0)
 
             combined_recs[rec['university_id']] = {
                 'university_id': rec['university_id'],
@@ -642,8 +633,9 @@ class UniversityRecommender:
 
         # Process embedding recommendations
         for rec in embedding_recs:
-            # Normalize embedding score to 0-1 range
-            normalized_embedding_score = min(rec['score'] / max_embedding_score, 1.0) if max_embedding_score > 0 else 0
+            # Embedding scores from cosine similarity are already between -1 and 1
+            # Normalize to 0-1 range
+            normalized_embedding_score = min(max((rec['score'] + 1) / 2, 0.0), 1.0)
 
             if rec['university_id'] in combined_recs:
                 combined_recs[rec['university_id']]['embedding_score'] = normalized_embedding_score
@@ -657,8 +649,7 @@ class UniversityRecommender:
                     'algorithm': 'hybrid'
                 }
 
-        # Calculate final scores
-        # Weights can be adjusted based on system performance
+        # Calculate final scores with normalized weights
         profile_weight = 0.6
         embedding_weight = 0.4
 
@@ -668,9 +659,9 @@ class UniversityRecommender:
             recommendations.append({
                 'university_id': uni_id,
                 'name': rec['name'],
-                'score': final_score,
-                'profile_match': rec['profile_score'] * 100,  # Convert to percentage (0-100)
-                'semantic_match': rec['embedding_score'] * 100,  # Convert to percentage (0-100)
+                'score': final_score,  # Will be between 0 and 1
+                'profile_match': min(rec['profile_score'] * 100, 100),  # Percentage capped at 100
+                'semantic_match': min(rec['embedding_score'] * 100, 100),  # Percentage capped at 100
                 'description': rec['description'],
                 'algorithm': 'hybrid'
             })
@@ -679,14 +670,15 @@ class UniversityRecommender:
         return sorted(recommendations, key=lambda x: x['score'], reverse=True)[:n]
 
     def _analyze_university_compatibility(self, user_data: Dict, university: Dict) -> Dict:
-        """Analyze compatibility between user and university on different factors."""
+        """Analyze compatibility between user and university on different factors.
+        Returns normalized compatibility scores between 0 and 1."""
         compatibility = {}
 
         # Analyze learning style compatibility
         if user_data.get('learning_style') and university.get('learning_styles'):
             user_style = user_data['learning_style']
             if user_style in university['learning_styles']:
-                compatibility['learning_style'] = university['learning_styles'][user_style]
+                compatibility['learning_style'] = min(university['learning_styles'][user_style], 1.0)
             else:
                 compatibility['learning_style'] = 0.2  # Low compatibility
 
@@ -702,7 +694,7 @@ class UniversityRecommender:
         if user_data.get('personality') and university.get('personality_distribution'):
             user_personality = user_data['personality']
             if user_personality in university['personality_distribution']:
-                compatibility['personality'] = university['personality_distribution'][user_personality]
+                compatibility['personality'] = min(university['personality_distribution'][user_personality], 1.0)
             else:
                 compatibility['personality'] = 0.2
 
@@ -717,13 +709,15 @@ class UniversityRecommender:
 
         for user_factor, uni_factor in importance_factors:
             if user_data.get(user_factor) is not None and university.get(uni_factor) is not None:
-                # Calculate how closely aligned the importance ratings are (on 1-10 scale)
-                difference = abs(user_data[user_factor] - university[uni_factor])
-                compatibility[user_factor] = 1 - (difference / 10)
+                # Normalize both values to 0-1 scale (assuming 1-10 scale for importance ratings)
+                user_value = (user_data[user_factor] - 1) / 9  # Normalize from 1-10 to 0-1
+                uni_value = (university[uni_factor] - 1) / 9
+                # Calculate similarity (inverse of normalized difference)
+                compatibility[user_factor] = 1 - abs(user_value - uni_value)
 
-        # Overall compatibility score
+        # Overall compatibility score (ensure it's between 0 and 1)
         if compatibility:
-            compatibility['overall'] = sum(compatibility.values()) / len(compatibility)
+            compatibility['overall'] = min(sum(compatibility.values()) / len(compatibility), 1.0)
         else:
             compatibility['overall'] = 0.5  # Default medium compatibility
 
