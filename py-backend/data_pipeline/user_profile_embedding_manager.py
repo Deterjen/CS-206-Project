@@ -119,7 +119,7 @@ class UserProfileEmbeddingManager:
             'ccas': user_data.get('ccas', [])
         }
 
-    def batch_get_embeddings(self, texts: List[str], batch_size: int = 256) -> Dict[str, np.ndarray]:
+    def batch_get_embeddings(self, texts: List[str], batch_size: int = 512) -> Dict[str, np.ndarray]:
         """Get embeddings for multiple texts in batches with caching."""
         # Remove duplicates while preserving order
         unique_texts = list(dict.fromkeys(texts))
@@ -207,7 +207,7 @@ class UserProfileEmbeddingManager:
         logger.info("Precomputing embeddings for training data...")
 
         # Precompute profile embeddings
-        batch_size = 128
+        batch_size = 512
         total_profiles = len(profiles_df)
         profile_batches = (total_profiles + batch_size - 1) // batch_size
 

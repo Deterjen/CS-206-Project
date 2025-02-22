@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify
 from university_recommender import UniversityRecommender
 
 app = Flask(__name__)
-recommender = UniversityRecommender('./data/analysis_ready_survey_data.csv')
+recommender = UniversityRecommender('./data/synthetic_data/synthetic_profiles.csv')
 
 
 @app.route('/')

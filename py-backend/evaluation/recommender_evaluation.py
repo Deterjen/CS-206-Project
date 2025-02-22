@@ -99,7 +99,7 @@ class RecommenderEvaluator:
         return batch_results
 
     def evaluate_recommendations(self, test_data: pd.DataFrame, k: int = 5, n_workers: int = 4,
-                                 batch_size: int = 32) -> Dict:
+                                 batch_size: int = 128) -> Dict:
         """
         Evaluate recommendations using parallel processing
         """
@@ -246,7 +246,7 @@ class RecommenderEvaluator:
 # Example usage:
 def main():
     # Initialize evaluator
-    evaluator = RecommenderEvaluator('../data/synthetic_data/all_profiles.csv')
+    evaluator = RecommenderEvaluator('../data/synthetic_data/synthetic_profiles.csv')
 
     # Prepare data and train recommender
     train_data, test_data = evaluator.prepare_train_test_split()
