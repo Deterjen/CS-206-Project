@@ -149,6 +149,7 @@
                                 <p class="text-center">{{ "%.0f"|format(explanation.compatibility.overall * 100) }}%
                                     Compatible</p>
 
+                                {% if explanation.semantic_similarity %}
                                 <h5>Semantic Similarity</h5>
                                 <div class="progress mb-3">
                                     <div class="progress-bar bg-info" role="progressbar"
@@ -159,6 +160,7 @@
                                 </div>
                                 <p class="text-center">{{ "%.0f"|format(explanation.semantic_similarity * 100) }}%
                                     Content Match</p>
+                                {% endif %}
                             </div>
                             <div class="col-md-6">
                                 <h5>Student Satisfaction</h5>
@@ -321,6 +323,7 @@
                                 </div>
                                 <p class="small text-center">{{ "%.0f"|format(rec.profile_match) }}%</p>
                             </div>
+                            {% if rec.semantic_match is defined %}
                             <div class="col-md-6">
                                 <h6>Semantic Match</h6>
                                 <div class="progress mb-2">
@@ -332,6 +335,7 @@
                                 </div>
                                 <p class="small text-center">{{ "%.0f"|format(rec.semantic_match) }}%</p>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}

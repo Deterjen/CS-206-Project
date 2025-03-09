@@ -7,8 +7,8 @@ def main():
     print("=============================================")
 
     # Initialize the recommender
-    recommender = UniversityRecommender('./data/analysis_ready_survey_data.csv')
-    # recommender = UniversityRecommender('./data/synthetic_data/all_profiles.csv')
+    # recommender = UniversityRecommender('./data/analysis_ready_survey_data.csv')
+    recommender = UniversityRecommender('./data/synthetic_data/all_profiles.csv')
     print(f"Loaded recommender with {len(recommender.universities)} universities")
 
     # Create an example user
@@ -67,7 +67,8 @@ def main():
         # Display compatibility score
         compatibility = explanation['compatibility']['overall']
         print(f"\nOverall compatibility: {compatibility:.2f} ({int(compatibility * 100)}%)")
-        print(f"Semantic similarity: {explanation['semantic_similarity']:.2f}")
+        if 'semantic_similarity' in explanation:
+            print(f"Semantic similarity: {explanation['semantic_similarity']:.2f}")
         print(f"Similar students found: {explanation['similar_students']}")
         print(f"Average satisfaction at this university: {explanation['avg_satisfaction']:.1f}/5")
 
@@ -78,13 +79,27 @@ def print_recommendations(recommendations, title):
     print("=" * len(title))
     for i, rec in enumerate(recommendations, 1):
         print(f"\n{i}. {rec['name']} (Score: {rec['score']:.2f})")
+
+        # Print profile match if available
         if 'profile_match' in rec:
-            print(f"   Profile match: {rec['profile_match']:.2f}")
+            print(f"   Profile match: {rec['profile_match']:.2f}%")
+
+        if 'semantic_match' in rec:
             print(f"   Semantic match: {rec['semantic_match']:.2f}")
-        if 'match_confidence' in rec:
-            print(f"   Match confidence: {rec['match_confidence']:.1f}%")
+
+        # Print confidence if available
+        if 'confidence' in rec:
+            print(f"   Confidence: {rec['confidence']:.1f}%")
+
+        # Print similar students count if available
         if 'similar_students_count' in rec:
             print(f"   Similar students: {rec['similar_students_count']}")
+
+        # Print average satisfaction if available
+        if 'avg_satisfaction' in rec:
+            print(f"   Average satisfaction: {rec['avg_satisfaction']:.1f}/5")
+
+        # Print description
         print(f"   {rec['description'][:150]}...")
 
 
