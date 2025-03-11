@@ -1,8 +1,10 @@
 "use client"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,9 +48,18 @@ export default function ProfileSetup() {
   }
 
   return (
-    <div className="container max-w-2xl py-10">
-      <Card>
+    <div className="flex justify-center items-center min-h-screen py-10 px-4">
+      <Card className="w-full max-w-2xl">
         <CardHeader>
+          <div className="flex items-center mb-2">
+            <Link
+              href="/"
+              className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-primary"
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back to Home
+            </Link>
+          </div>
           <CardTitle>Profile Setup</CardTitle>
           <CardDescription>Complete your profile to get personalized university recommendations.</CardDescription>
         </CardHeader>
@@ -145,9 +156,14 @@ export default function ProfileSetup() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Save Profile
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-4 sm:justify-between">
+                <Button type="button" variant="outline" onClick={() => router.push("/")} className="order-2 sm:order-1">
+                  Cancel
+                </Button>
+                <Button type="submit" className="order-1 sm:order-2">
+                  Save Profile
+                </Button>
+              </div>
             </form>
           </Form>
         </CardContent>
@@ -155,3 +171,4 @@ export default function ProfileSetup() {
     </div>
   )
 }
+
