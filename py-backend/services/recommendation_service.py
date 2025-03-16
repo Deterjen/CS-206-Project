@@ -1,13 +1,14 @@
 from typing import List, Dict, Any, Optional
 
 from .recommendation_model import UniversityRecommender
-from .supabase_db import SupabaseDB
+from .supabase_client import SupabaseDB
 
 
 class UniversityRecommendationService:
     """
     Service class that connects the database client with the recommendation model.
-    This class handles the business logic for university recommendations.
+    This class orchestrates the recommendation process, managing data flow between
+    the database and the recommender model.
     """
 
     def __init__(self, supabase_client: SupabaseDB):
@@ -27,9 +28,70 @@ class UniversityRecommendationService:
         Args:
             category_weights: Optional custom weights for recommendation categories
         """
-        self.recommender = UniversityRecommender(category_weights=category_weights)
-        # Load data into the recommender
-        self.recommender.load_data(self.db.supabase)
+        # Create a fresh recommender (or update weights if provided)
+        if category_weights:
+            self.recommender = UniversityRecommender(category_weights=category_weights)
+
+        # Load all necessary data from the database
+        universities = self._load_universities()
+        existing_students = self._load_existing_students()
+        programs = self._load_programs()
+
+        # Provide this data to the recommender
+        self.recommender.set_data(universities, existing_students, programs)
+
+    def _load_universities(self) -> List[Dict[str, Any]]:
+        """Load all universities from the database"""
+        return self.db.get_universities(limit=1000)
+
+    def _load_programs(self) -> List[Dict[str, Any]]:
+        """Load all programs from the database"""
+        return self.db.get_programs(limit=1000)
+
+    def _load_existing_students(self) -> List[Dict[str, Any]]:
+        """Load all existing students with complete profiles from the database"""
+        # Get all existing student IDs
+        response = self.db.supabase.table("existing_students").select("id").execute()
+        student_ids = [student["id"] for student in response.data]
+
+        # Load complete profiles for each student
+        students = []
+        for student_id in student_ids:
+            student_data = self.db.get_existing_student_complete(student_id)
+            if student_data:
+                # Flatten the student data into a single dictionary for the recommender
+                flat_student = self._flatten_existing_student(student_data)
+                students.append(flat_student)
+
+        return students
+
+    def _flatten_existing_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Flatten a nested student profile into a single dictionary for easier processing.
+
+        Args:
+            student_data: A nested dictionary with student data sections
+
+        Returns:
+            A flat dictionary with all student attributes
+        """
+        flat_data = {"id": student_data["core"]["id"]}
+
+        # Copy core data
+        for key, value in student_data["core"].items():
+            if key != "id":  # Already have this
+                flat_data[key] = value
+
+        # Copy data from each section
+        for section in ["university_info", "academic", "social", "career",
+                        "financial", "facilities", "reputation", "personal_fit",
+                        "selection_criteria", "additional_insights"]:
+            if section in student_data and student_data[section]:
+                for key, value in student_data[section].items():
+                    if key not in ["id", "student_id", "created_at"]:
+                        flat_data[key] = value
+
+        return flat_data
 
     def process_questionnaire(self, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -41,9 +103,8 @@ class UniversityRecommendationService:
         Returns:
             Created aspiring student record
         """
-        # Validate and format the data using Pydantic models
+        # Validate and format the data
         try:
-            # Parse the data into appropriate sections
             formatted_data = self._format_aspiring_student_data(aspiring_student_data)
 
             # Create the aspiring student record
@@ -78,6 +139,7 @@ class UniversityRecommendationService:
         }
 
         # Map questions to sections based on questionnaire structure
+
         # Academic section
         if "preferred_fields" in raw_data:
             formatted_data["academic"]["preferred_fields"] = raw_data["preferred_fields"]
@@ -146,40 +208,18 @@ class UniversityRecommendationService:
 
         return formatted_data
 
-    def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
+    def get_aspiring_student_profile(self, student_id: int) -> Dict[str, Any]:
         """
-        Generate university recommendations for an aspiring student.
-
-        Args:
-            aspiring_student_id: ID of the aspiring student
-            top_n: Number of recommendations to generate
-
-        Returns:
-            List of university recommendations with scores
-        """
-        # Get the aspiring student's complete profile
-        aspiring_profile = self._get_aspiring_student_profile(aspiring_student_id)
-
-        # Generate recommendations using the recommendation model
-        recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
-
-        # Save recommendations to the database
-        saved_recommendations = self.db.save_recommendations(aspiring_student_id, recommendations)
-
-        return saved_recommendations
-
-    def _get_aspiring_student_profile(self, student_id: int) -> Dict[str, Any]:
-        """
-        Convert an aspiring student's database record to a profile format for the recommender.
+        Get a complete aspiring student profile in a format suitable for the recommender.
 
         Args:
             student_id: ID of the aspiring student
 
         Returns:
-            Profile dictionary formatted for the recommendation model
+            A flat dictionary with all student attributes
         """
-        # Get the aspiring student's complete record
-        student_data = {}
+        # Get all the data from the database
+        profile_data = {}
 
         # Get core data
         core_response = self.db.supabase.table("aspiring_students").select("*").eq("id", student_id).limit(1).execute()
@@ -198,9 +238,31 @@ class UniversityRecommendationService:
                 section_data = section_response.data[0]
                 for key, value in section_data.items():
                     if key not in ["id", "student_id", "created_at"]:
-                        student_data[key] = value
+                        profile_data[key] = value
 
-        return student_data
+        return profile_data
+
+    def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
+        """
+        Generate university recommendations for an aspiring student.
+
+        Args:
+            aspiring_student_id: ID of the aspiring student
+            top_n: Number of recommendations to generate
+
+        Returns:
+            List of university recommendations with scores
+        """
+        # Get the aspiring student's profile
+        aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
+
+        # Generate recommendations using the recommender
+        recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
+
+        # Save recommendations to the database
+        saved_recommendations = self.db.save_recommendations(aspiring_student_id, recommendations)
+
+        return saved_recommendations
 
     def get_similar_students(self, aspiring_student_id: int, top_n: int = 5) -> List[Dict[str, Any]]:
         """
@@ -214,12 +276,19 @@ class UniversityRecommendationService:
             List of similar students with similarity scores
         """
         # Get the aspiring student's profile
-        aspiring_profile = self._get_aspiring_student_profile(aspiring_student_id)
+        aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
 
         # Use the recommender to find similar students
         similar_students = self.recommender.find_similar_students(aspiring_profile, top_n=top_n)
 
-        return similar_students
+        # Enhance with additional student details if needed
+        enhanced_students = []
+        for student in similar_students:
+            student_id = student['student_id']
+            # Could get additional student details here if needed
+            enhanced_students.append(student)
+
+        return enhanced_students
 
     def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
         """
@@ -276,62 +345,9 @@ class UniversityRecommendationService:
         """
         return self.db.save_recommendation_feedback(recommendation_id, rating, text)
 
-
-# Example usage:
-'''
-# Initialize the service
-supabase_db = SupabaseDB.from_env()
-recommendation_service = UniversityRecommendationService(supabase_db)
-
-# Initialize the recommender with data
-recommendation_service.initialize_recommender()
-
-# Process a questionnaire submission
-questionnaire_data = {
-    "preferred_fields": ["Business", "Computing/IT"],
-    "learning_style": "Hands-on/Practical",
-    "career_goals": "Technology entrepreneurship",
-    "further_education": "Yes",
-    "culture_importance": 8,
-    "interested_activities": ["Sports", "Professional/Career Clubs"],
-    "weekly_extracurricular_hours": "6–10 hours",
-    "passionate_activities": "Basketball, coding competitions",
-    "internship_importance": 9,
-    "leadership_interest": True,
-    "alumni_network_value": 8,
-    "affordability_importance": 7,
-    "yearly_budget": 30000,
-    "financial_aid_interest": True,
-    "preferred_region": "California",
-    "preferred_setting": "Urban",
-    "preferred_living_arrangement": "On Campus",
-    "important_facilities": ["Libraries and Study Spaces", "Modern Amenities"],
-    "modern_amenities_importance": 8,
-    "ranking_importance": 7,
-    "alumni_testimonial_influence": 8,
-    "important_selection_factors": ["Academic Reputation", "Internship Opportunities"],
-    "personality_traits": ["Ambitious", "Analytical", "Extroverted"],
-    "preferred_student_population": "Large",
-    "lifestyle_preferences": "Active campus life with balance between academics and social"
-}
-
-# Process the questionnaire
-student_record = recommendation_service.process_questionnaire(questionnaire_data)
-student_id = student_record["core"]["id"]
-
-# Generate recommendations
-recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
-
-# Get similar students
-similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-
-# Get recommendation details
-recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
-
-# Collect feedback
-feedback = recommendation_service.collect_feedback(
-    recommendations[0]["id"],
-    rating=4,
-    text="This recommendation was very helpful and matched my preferences well!"
-)
-'''
+    def refresh_recommender(self):
+        """
+        Refresh the recommender with the latest data from the database.
+        Call this when significant changes have been made to the data.
+        """
+        self.initialize_recommender(self.recommender.category_weights)

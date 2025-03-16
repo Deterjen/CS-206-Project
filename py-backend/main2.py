@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 from services.recommendation_service import UniversityRecommendationService
-from services.supabase_db import SupabaseDB
+from services.supabase_client import SupabaseDB
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,18 +18,18 @@ logging.debug(f"SUPABASE_KEY: {os.getenv('SUPABASE_KEY')}")
 
 if __name__ == '__main__':
     # Initialize the service
-    logging.debug("Initializing SupabaseDB from environment.")
+    logging.info("Initializing SupabaseDB from environment.")
     supabase_db = SupabaseDB.from_env()
-    logging.debug("SupabaseDB initialized.")
+    logging.info("SupabaseDB initialized.")
 
-    logging.debug("Initializing UniversityRecommendationService.")
+    logging.info("Initializing UniversityRecommendationService.")
     recommendation_service = UniversityRecommendationService(supabase_db)
-    logging.debug("UniversityRecommendationService initialized.")
+    logging.info("UniversityRecommendationService initialized.")
 
     # Initialize the recommender with data
-    logging.debug("Initializing recommender with data.")
+    logging.info("Initializing recommender with data.")
     recommendation_service.initialize_recommender()
-    logging.debug("Recommender initialized.")
+    logging.info("Recommender initialized.")
 
     # Process a questionnaire submission
     questionnaire_data = {
@@ -61,31 +61,34 @@ if __name__ == '__main__':
     }
 
     # Process the questionnaire
-    logging.debug("Processing questionnaire submission.")
+    logging.info("Processing questionnaire submission.")
     student_record = recommendation_service.process_questionnaire(questionnaire_data)
     student_id = student_record["core"]["id"]
-    logging.debug(f"Questionnaire processed. Student ID: {student_id}")
+    logging.info(f"Questionnaire processed. Student ID: {student_id}")
 
     # Generate recommendations
-    logging.debug("Generating recommendations.")
+    logging.info("Generating recommendations.")
     recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
-    logging.debug(f"Recommendations generated: {recommendations}")
+    logging.info(f"Recommendations generated: {recommendations}")
 
     # Get similar students
-    logging.debug("Getting similar students.")
+    logging.info("Getting similar students.")
     similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-    logging.debug(f"Similar students found: {similar_students}")
+    logging.info(f"Similar students found: {similar_students}")
 
     # Get recommendation details
-    logging.debug("Getting recommendation details.")
+    logging.info("Getting recommendation details.")
     recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
-    logging.debug(f"Recommendation details: {recommendation_details}")
+    logging.info(f"Recommendation details: {recommendation_details}")
 
-    # Collect feedback
-    logging.debug("Collecting feedback.")
-    feedback = recommendation_service.collect_feedback(
-        recommendations[0]["id"],
-        rating=4,
-        text="This recommendation was very helpful and matched my preferences well!"
-    )
-    logging.debug(f"Feedback collected: {feedback}")
+    # # Collect feedback
+    # logging.debug("Collecting feedback.")
+    # feedback = recommendation_service.collect_feedback(
+    #     recommendations[0]["id"],
+    #     rating=4,
+    #     text="This recommendation was very helpful and matched my preferences well!"
+    # )
+    # logging.info(f"Feedback collected: {feedback}")
+    #
+    # # After adding new data to the system, refresh the recommender
+    # recommendation_service.refresh_recommender()
