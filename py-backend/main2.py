@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB
+from services.llm_justification import JustificationGenerator
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -15,6 +16,8 @@ load_dotenv('.env.local')
 # Log the loaded environment variables
 logging.debug(f"SUPABASE_URL: {os.getenv('SUPABASE_URL')}")
 logging.debug(f"SUPABASE_KEY: {os.getenv('SUPABASE_KEY')}")
+logging.debug(f"JAMAIBASE_PAT:{os.getenv('JAMAIBASE_PAT')}")
+logging.debug(f"JAMAIBASE_PROJECT_ID:{os.getenv('JAMAIBASE_PROJECT_ID')}")
 
 if __name__ == '__main__':
     # Initialize the service
@@ -30,6 +33,11 @@ if __name__ == '__main__':
     logging.info("Initializing recommender with data.")
     recommendation_service.initialize_recommender()
     logging.info("Recommender initialized.")
+
+    # Initialize the recommender with data
+    logging.info("Initializing JustificationGenerator.")
+    justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
+    logging.info("JustificationGenerator initialized.")
 
     # Process a questionnaire submission
     questionnaire_data = {
@@ -80,6 +88,14 @@ if __name__ == '__main__':
     logging.info("Getting recommendation details.")
     recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
     logging.info(f"Recommendation details: {recommendation_details}")
+
+    # Get Justification
+    logging.info("Getting justification.")
+    student_profile = recommendation_service.get_aspiring_student_profile(student_id)
+    recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
+    similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
+    justification = justificationGenerator.generate_justification(student_profile, recommendation_details, similar_students)    
+    logging.info(f"Justification: {justification}")
 
     # # Collect feedback
     # logging.debug("Collecting feedback.")
