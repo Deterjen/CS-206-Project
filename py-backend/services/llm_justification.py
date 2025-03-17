@@ -19,7 +19,7 @@ class JustificationGenerator:
                 table_id="Recommender",
                 data=[{
                     "Student Profile": student_profile,
-                    "University Recommendation": recommended_university,
+                    "Recommendation": recommended_university,
                     "Similar Students": similar_students
                 }],
                 stream=False
