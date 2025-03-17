@@ -4,9 +4,9 @@ import os
 
 from dotenv import load_dotenv
 
+from services.llm_justification import JustificationGenerator
 from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB
-from services.llm_justification import JustificationGenerator
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     print(f"\nFound {len(similar_students)} similar students for recommendation #{first_recommendation_id}")
 
     # Get comprehensive details for the first recommendation
-    recommendation_details = recommendation_service.get_recommendation_with_details(first_recommendation_id)
+    recommendation_details = recommendation_service.get_recommendation_details(first_recommendation_id)
 
     # Alternatively, get all recommendations with details at once
     all_recommendations = recommendation_service.get_recommendations_with_details(student_id)
@@ -99,6 +99,6 @@ if __name__ == '__main__':
     logging.info("Getting justification.")
     student_profile = recommendation_service.get_aspiring_student_profile(student_id)
     recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
-    similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-    justification = justificationGenerator.generate_justification(student_profile, recommendation_details, similar_students)
+    # similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
+    justification = justificationGenerator.generate_justification(student_profile, recommendation_details)
     logging.info(f"Justification: {justification}")

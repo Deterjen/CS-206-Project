@@ -335,7 +335,7 @@ class UniversityRecommendationService:
 
         return similar_students
 
-    def get_recommendation_with_details(self, recommendation_id: int) -> Dict[str, Any]:
+    def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
         """
         Get comprehensive details for a recommendation including university and similar students.
 
@@ -393,7 +393,7 @@ class UniversityRecommendationService:
         # Get details for each recommendation
         detailed_recommendations = []
         for rec in recommendations:
-            detailed_rec = self.get_recommendation_with_details(rec["id"])
+            detailed_rec = self.get_recommendation_details(rec["id"])
             detailed_recommendations.append(detailed_rec)
 
         return detailed_recommendations
