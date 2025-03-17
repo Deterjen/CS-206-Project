@@ -367,6 +367,86 @@ class SupabaseDB:
 
         return recommendations
 
+    def save_similar_student(self, recommendation_id: int, student_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Save a similar student record with detailed similarity scores.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+            student_data: Dictionary containing similarity data
+
+        Returns:
+            Created similar student record
+        """
+        data = {
+            "recommendation_id": recommendation_id,
+            "existing_student_id": student_data["student_id"],
+            "similarity_score": student_data["overall_similarity"],
+            "academic_similarity": student_data.get("academic_similarity", 0),
+            "social_similarity": student_data.get("social_similarity", 0),
+            "financial_similarity": student_data.get("financial_similarity", 0),
+            "career_similarity": student_data.get("career_similarity", 0),
+            "geographic_similarity": student_data.get("geographic_similarity", 0),
+            "facilities_similarity": student_data.get("facilities_similarity", 0),
+            "reputation_similarity": student_data.get("reputation_similarity", 0),
+            "personal_fit_similarity": student_data.get("personal_fit_similarity", 0)
+        }
+
+        response = self.supabase.table("similar_students").insert(data).execute()
+        return response.data[0]
+
+    def get_similar_students_for_recommendation(self, recommendation_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all similar students for a recommendation with their details.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+
+        Returns:
+            List of similar student records with existing student details
+        """
+        response = self.supabase.table("similar_students") \
+            .select("*, existing_students(*)") \
+            .eq("recommendation_id", recommendation_id) \
+            .execute()
+
+        return response.data
+
+    def get_recommendation_with_details(self, recommendation_id: int) -> Dict[str, Any]:
+        """
+        Get a recommendation with university and similar student details.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+
+        Returns:
+            Recommendation record with related details
+        """
+        # Get the recommendation
+        recommendation_response = self.supabase.table("recommendations").select("*").eq("id", recommendation_id).limit(
+            1).execute()
+
+        if not recommendation_response.data:
+            return None
+
+        recommendation = recommendation_response.data[0]
+
+        # Get the university
+        university_id = recommendation["university_id"]
+        university = self.get_university_by_id(university_id)
+
+        # Get similar students
+        similar_students = self.get_similar_students_for_recommendation(recommendation_id)
+
+        # Combine all data
+        result = {
+            "recommendation": recommendation,
+            "university": university,
+            "similar_students": similar_students
+        }
+
+        return result
+
     # ===== Feedback Operations =====
 
     def save_recommendation_feedback(self, recommendation_id: int, rating: int, text: str) -> Dict[str, Any]:

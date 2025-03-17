@@ -218,9 +218,17 @@ CREATE TABLE recommendations (
 
 CREATE TABLE similar_students (
     id SERIAL PRIMARY KEY,
-    recommendation_id INTEGER REFERENCES recommendations (id),
-    existing_student_id INTEGER REFERENCES existing_students (id),
+    recommendation_id INTEGER REFERENCES recommendations(id),
+    existing_student_id INTEGER REFERENCES existing_students(id),
     similarity_score FLOAT,
+    academic_similarity FLOAT,
+    social_similarity FLOAT, 
+    financial_similarity FLOAT,
+    career_similarity FLOAT,
+    geographic_similarity FLOAT,
+    facilities_similarity FLOAT,
+    reputation_similarity FLOAT,
+    personal_fit_similarity FLOAT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

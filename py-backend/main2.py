@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -60,35 +61,28 @@ if __name__ == '__main__':
         "lifestyle_preferences": "Active campus life with balance between academics and social"
     }
 
-    # Process the questionnaire
-    logging.info("Processing questionnaire submission.")
+    # Process the questionnaire and create student profile
     student_record = recommendation_service.process_questionnaire(questionnaire_data)
     student_id = student_record["core"]["id"]
-    logging.info(f"Questionnaire processed. Student ID: {student_id}")
 
-    # Generate recommendations
-    logging.info("Generating recommendations.")
+    # Generate recommendations (without similar students)
     recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
-    logging.info(f"Recommendations generated: {recommendations}")
+    print(f"\nGenerated {len(recommendations)} recommendations")
 
-    # Get similar students
-    logging.info("Getting similar students.")
-    similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-    logging.info(f"Similar students found: {similar_students}")
+    # Get the first recommendation's ID
+    first_recommendation_id = recommendations[0]["id"]
 
-    # Get recommendation details
-    logging.info("Getting recommendation details.")
-    recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
-    logging.info(f"Recommendation details: {recommendation_details}")
+    # Get similar students for the first recommendation
+    similar_students = recommendation_service.get_similar_students(first_recommendation_id)
+    print(f"\nFound {len(similar_students)} similar students for recommendation #{first_recommendation_id}")
 
-    # # Collect feedback
-    # logging.debug("Collecting feedback.")
-    # feedback = recommendation_service.collect_feedback(
-    #     recommendations[0]["id"],
-    #     rating=4,
-    #     text="This recommendation was very helpful and matched my preferences well!"
-    # )
-    # logging.info(f"Feedback collected: {feedback}")
-    #
-    # # After adding new data to the system, refresh the recommender
-    # recommendation_service.refresh_recommender()
+    # Get comprehensive details for the first recommendation
+    recommendation_details = recommendation_service.get_recommendation_with_details(first_recommendation_id)
+
+    # Alternatively, get all recommendations with details at once
+    all_recommendations = recommendation_service.get_recommendations_with_details(student_id)
+    print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
+
+    # Example of saving comprehensive data to file for debugging
+    with open("recommendation_data.json", "w") as f:
+        json.dump(recommendation_details, f, indent=2)

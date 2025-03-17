@@ -245,6 +245,7 @@ class UniversityRecommendationService:
     def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
         """
         Generate university recommendations for an aspiring student.
+        Similar students are saved but not included in the response for modularity.
 
         Args:
             aspiring_student_id: ID of the aspiring student
@@ -257,48 +258,92 @@ class UniversityRecommendationService:
         aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
 
         # Generate recommendations using the recommender
-        recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
+        raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
 
-        # Save recommendations to the database
-        saved_recommendations = self.db.save_recommendations(aspiring_student_id, recommendations)
+        # Process and save recommendations
+        saved_recommendations = []
+
+        for rec in raw_recommendations:
+            # Prepare recommendation data without similar students
+            rec_data = {
+                "aspiring_student_id": aspiring_student_id,
+                "university_id": rec["university_id"],
+                "overall_score": rec["overall_score"],
+                "academic_score": rec["academic_score"],
+                "social_score": rec["social_score"],
+                "financial_score": rec["financial_score"],
+                "career_score": rec["career_score"],
+                "geographic_score": rec["geographic_score"],
+                "facilities_score": rec["facilities_score"],
+                "reputation_score": rec["reputation_score"],
+                "personal_fit_score": rec["personal_fit_score"]
+            }
+
+            # Insert recommendation record
+            rec_response = self.db.supabase.table("recommendations").insert(rec_data).execute()
+            recommendation_id = rec_response.data[0]["id"]
+            saved_rec = rec_response.data[0]
+
+            # Save similar students separately with detailed similarity scores
+            for student in rec.get("similar_students", []):
+                student_data = {
+                    "recommendation_id": recommendation_id,
+                    "existing_student_id": student["student_id"],
+                    "similarity_score": student["overall_similarity"],
+                    "academic_similarity": student["academic_similarity"],
+                    "social_similarity": student["social_similarity"],
+                    "financial_similarity": student["financial_similarity"],
+                    "career_similarity": student["career_similarity"],
+                    "geographic_similarity": student["geographic_similarity"],
+                    "facilities_similarity": student["facilities_similarity"],
+                    "reputation_similarity": student["reputation_similarity"],
+                    "personal_fit_similarity": student["personal_fit_similarity"]
+                }
+
+                self.db.supabase.table("similar_students").insert(student_data).execute()
+
+            saved_recommendations.append(saved_rec)
 
         return saved_recommendations
 
-    def get_similar_students(self, aspiring_student_id: int, top_n: int = 5) -> List[Dict[str, Any]]:
+    def get_similar_students(self, recommendation_id: int) -> List[Dict[str, Any]]:
         """
-        Find existing students who are most similar to the aspiring student.
-
-        Args:
-            aspiring_student_id: ID of the aspiring student
-            top_n: Number of similar students to find
-
-        Returns:
-            List of similar students with similarity scores
-        """
-        # Get the aspiring student's profile
-        aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
-
-        # Use the recommender to find similar students
-        similar_students = self.recommender.find_similar_students(aspiring_profile, top_n=top_n)
-
-        # Enhance with additional student details if needed
-        enhanced_students = []
-        for student in similar_students:
-            student_id = student['student_id']
-            # Could get additional student details here if needed
-            enhanced_students.append(student)
-
-        return enhanced_students
-
-    def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
-        """
-        Get detailed information about a recommendation.
+        Get all similar students for a specific recommendation.
 
         Args:
             recommendation_id: ID of the recommendation
 
         Returns:
-            Detailed recommendation information
+            List of similar students with detailed similarity scores
+        """
+        # Get similar students from the database
+        response = self.db.supabase.table("similar_students") \
+            .select("*, existing_students(*)") \
+            .eq("recommendation_id", recommendation_id) \
+            .execute()
+
+        similar_students = response.data
+
+        # Enhance with university details
+        for student in similar_students:
+            if "existing_students" in student and student["existing_students"]:
+                # Get university details for this student
+                university_id = student["existing_students"].get("university_id")
+                if university_id:
+                    university = self.db.get_university_by_id(university_id)
+                    student["university"] = university
+
+        return similar_students
+
+    def get_recommendation_with_details(self, recommendation_id: int) -> Dict[str, Any]:
+        """
+        Get comprehensive details for a recommendation including university and similar students.
+
+        Args:
+            recommendation_id: ID of the recommendation
+
+        Returns:
+            Comprehensive recommendation data
         """
         # Get the recommendation
         recommendation_response = self.db.supabase.table("recommendations").select("*").eq("id",
@@ -315,12 +360,7 @@ class UniversityRecommendationService:
         university = self.db.get_university_by_id(university_id)
 
         # Get similar students
-        similar_students_response = self.db.supabase.table("similar_students") \
-            .select("*, existing_students(*)") \
-            .eq("recommendation_id", recommendation_id) \
-            .execute()
-
-        similar_students = similar_students_response.data
+        similar_students = self.get_similar_students(recommendation_id)
 
         # Combine all data
         result = {
@@ -330,6 +370,33 @@ class UniversityRecommendationService:
         }
 
         return result
+
+    def get_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all recommendations for an aspiring student with university and similar student details.
+
+        Args:
+            aspiring_student_id: ID of the aspiring student
+
+        Returns:
+            List of comprehensive recommendation data
+        """
+        # Get all recommendations for this student
+        response = self.db.supabase.table("recommendations") \
+            .select("*") \
+            .eq("aspiring_student_id", aspiring_student_id) \
+            .order("overall_score", desc=True) \
+            .execute()
+
+        recommendations = response.data
+
+        # Get details for each recommendation
+        detailed_recommendations = []
+        for rec in recommendations:
+            detailed_rec = self.get_recommendation_with_details(rec["id"])
+            detailed_recommendations.append(detailed_rec)
+
+        return detailed_recommendations
 
     def collect_feedback(self, recommendation_id: int, rating: int, text: str) -> Dict[str, Any]:
         """

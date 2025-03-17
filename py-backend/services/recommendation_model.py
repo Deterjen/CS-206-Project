@@ -471,10 +471,7 @@ class UniversityRecommender:
 
             # Add to similar students list if in top 3 for this university
             if len(university_scores[uni_id]['similar_students']) < 3:
-                university_scores[uni_id]['similar_students'].append({
-                    'student_id': student['student_id'],
-                    'similarity': student['overall_similarity']
-                })
+                university_scores[uni_id]['similar_students'].append(student)
 
         # Calculate average scores and normalize by student count
         results = []

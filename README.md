@@ -178,18 +178,24 @@ questionnaire_data = {
     # ... other questionnaire responses
 }
 
-# Save the student profile and get the ID
+# Process the questionnaire and create student profile
 student_record = recommendation_service.process_questionnaire(questionnaire_data)
 student_id = student_record["core"]["id"]
 
-# Generate university recommendations
+# Generate recommendations (without similar students)
 recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
 
-# Get similar existing students
-similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
+# Get the first recommendation's ID
+first_recommendation_id = recommendations[0]["id"]
 
-# Get detailed recommendation information
-recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
+# Get similar students for the first recommendation
+similar_students = recommendation_service.get_similar_students(first_recommendation_id)
+
+# Get comprehensive details for the first recommendation
+recommendation_details = recommendation_service.get_recommendation_with_details(first_recommendation_id)
+
+# Alternatively, get all recommendations with details at once
+all_recommendations = recommendation_service.get_recommendations_with_details(student_id)
 ```
 
 ### Example Script
