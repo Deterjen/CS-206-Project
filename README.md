@@ -133,81 +133,27 @@ After starting your local Supabase instance, you need to set up the database sch
 
 1. Access the Supabase Studio at http://localhost:54323
 2. Go to the SQL Editor
-3. Run the following SQL to create the necessary tables (adjust as needed based on schema.py):
+3. Execute the schema creation SQL file:
+   - Load the `postgres.sql` file from the project root
+   - Execute the SQL to create all necessary tables and relationships
 
-```sql
--- Create main tables
-CREATE TABLE universities (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    location TEXT NOT NULL,
-    size TEXT CHECK (size IN ('Small', 'Medium', 'Large')),
-    setting TEXT CHECK (setting IN ('Urban', 'Rural')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+### Loading Test Data
 
-CREATE TABLE programs (
-    id SERIAL PRIMARY KEY,
-    university_id INTEGER REFERENCES universities(id),
-    name TEXT NOT NULL,
-    department TEXT,
-    degree_level TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+To populate the database with sample data for testing:
 
-CREATE TABLE existing_students (
-    id SERIAL PRIMARY KEY,
-    university_id INTEGER REFERENCES universities(id),
-    program_id INTEGER REFERENCES programs(id),
-    year_of_study TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+1. In the Supabase SQL Editor, load the `tempdata.sql` file
+2. Execute the SQL to insert test universities, programs, existing students, and their questionnaire responses
+3. This test data enables you to immediately test the recommendation system functionality
 
-CREATE TABLE aspiring_students (
-    id SERIAL PRIMARY KEY,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+You can also execute these files from the command line:
 
--- Create section tables for existing students
--- (Create one table for each section in the questionnaire)
--- Example:
-CREATE TABLE existing_students_university_info (
-    id SERIAL PRIMARY KEY,
-    student_id INTEGER REFERENCES existing_students(id),
-    overall_satisfaction INTEGER CHECK (overall_satisfaction BETWEEN 1 AND 10),
-    university_match INTEGER CHECK (university_match BETWEEN 1 AND 10),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+```bash
+# Execute schema creation
+psql -h localhost -p 5432 -U postgres -d postgres -f postgres.sql
 
--- Add more section tables as needed...
-
--- Create tables for recommendations
-CREATE TABLE recommendations (
-    id SERIAL PRIMARY KEY,
-    aspiring_student_id INTEGER REFERENCES aspiring_students(id),
-    university_id INTEGER REFERENCES universities(id),
-    overall_score FLOAT CHECK (overall_score BETWEEN 0 AND 1),
-    academic_score FLOAT CHECK (academic_score BETWEEN 0 AND 1),
-    social_score FLOAT CHECK (social_score BETWEEN 0 AND 1),
-    financial_score FLOAT CHECK (financial_score BETWEEN 0 AND 1),
-    career_score FLOAT CHECK (career_score BETWEEN 0 AND 1),
-    geographic_score FLOAT CHECK (geographic_score BETWEEN 0 AND 1),
-    facilities_score FLOAT CHECK (facilities_score BETWEEN 0 AND 1),
-    reputation_score FLOAT CHECK (reputation_score BETWEEN 0 AND 1),
-    personal_fit_score FLOAT CHECK (personal_fit_score BETWEEN 0 AND 1),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE similar_students (
-    id SERIAL PRIMARY KEY,
-    recommendation_id INTEGER REFERENCES recommendations(id),
-    existing_student_id INTEGER REFERENCES existing_students(id),
-    similarity_score FLOAT CHECK (similarity_score BETWEEN 0 AND 1),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+# Load test data
+psql -h localhost -p 5432 -U postgres -d postgres -f tempdata.sql
 ```
-
-The full database schema should be constructed based on the `schema.py` file in your project.
 
 ## Usage
 
