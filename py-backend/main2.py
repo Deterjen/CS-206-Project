@@ -88,7 +88,7 @@ if __name__ == '__main__':
     recommendation_details = recommendation_service.get_recommendation_details(first_recommendation_id)
 
     # Alternatively, get all recommendations with details at once
-    all_recommendations = recommendation_service.get_recommendations_with_details(student_id)
+    all_recommendations = recommendation_service.get_recommendations_details(student_id)
     print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
 
     # Example of saving comprehensive data to file for debugging
@@ -100,5 +100,13 @@ if __name__ == '__main__':
     student_profile = recommendation_service.get_aspiring_student_profile(student_id)
     recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
     # similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-    justification = justificationGenerator.generate_justification(student_profile, recommendation_details)
+    # Extract only the 'recommendation' and 'university' keys from recommendation_details
+    recommendation_and_university = {
+        "recommendation": recommendation_details["recommendation"],
+        "university": recommendation_details["university"]
+    }
+
+    # Pass the extracted data to the generate_justification method
+    justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
+                                                                  recommendation_details['similar_students'])
     logging.info(f"Justification: {justification}")

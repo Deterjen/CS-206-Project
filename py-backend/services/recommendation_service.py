@@ -359,19 +359,47 @@ class UniversityRecommendationService:
         university_id = recommendation["university_id"]
         university = self.db.get_university_by_id(university_id)
 
-        # Get similar students
-        similar_students = self.get_similar_students(recommendation_id)
+        # Get similar students from the database
+        similar_students_response = self.db.supabase.table("similar_students") \
+            .select("*, existing_students(*)") \
+            .eq("recommendation_id", recommendation_id) \
+            .execute()
+
+        # Transform the similar students data to the desired format
+        formatted_similar_students = []
+        for student in similar_students_response.data:
+            # Get the university information for this student
+            student_university_id = student["existing_students"]["university_id"]
+            student_university = self.db.get_university_by_id(student_university_id)
+
+            # Create the formatted student object
+            formatted_student = {
+                "student_id": student["existing_student_id"],
+                "university_id": student_university_id,
+                "university_name": student_university["name"],
+                "overall_similarity": student["similarity_score"],
+                "academic_similarity": student["academic_similarity"],
+                "social_similarity": student["social_similarity"],
+                "financial_similarity": student["financial_similarity"],
+                "career_similarity": student["career_similarity"],
+                "geographic_similarity": student["geographic_similarity"],
+                "facilities_similarity": student["facilities_similarity"],
+                "reputation_similarity": student["reputation_similarity"],
+                "personal_fit_similarity": student["personal_fit_similarity"]
+            }
+
+            formatted_similar_students.append(formatted_student)
 
         # Combine all data
         result = {
             "recommendation": recommendation,
             "university": university,
-            "similar_students": similar_students
+            "similar_students": formatted_similar_students
         }
 
         return result
 
-    def get_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
+    def get_recommendations_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
         Get all recommendations for an aspiring student with university and similar student details.
 
