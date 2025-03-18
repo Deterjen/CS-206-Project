@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@plugin "tailwindcss-animate";
-
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
@@ -177,6 +175,11 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  .snap-y {
+    scroll-behavior: smooth;
+    transition-duration: 100ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 

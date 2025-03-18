@@ -1,3 +1,4 @@
+"use client"
 import { Bell, GraduationCapIcon as Graduation, User } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -5,7 +6,7 @@ import { FileUpload } from "@/components/file-upload"
 
 export default function ProfileDashboard() {
   return (
-    <div className="container py-10">
+    <div className="container py-10 px-12">
       <h1 className="text-3xl font-bold mb-8">Profile Dashboard</h1>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
