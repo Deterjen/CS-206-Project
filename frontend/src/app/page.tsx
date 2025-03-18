@@ -9,12 +9,12 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen">
       {/* Navigation */}
       <header className="border-b">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex h-16 items-center justify-between pl-8 pr-4">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6" />
             <span className="text-xl font-bold">Unify</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-x-8 pl-20">
             <Link href="#features" className="text-sm font-medium hover:underline">
               Features
             </Link>
@@ -26,7 +26,7 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/profile/setup">
+            <Link href="/auth">
               <Button variant="outline">Sign Up</Button>
             </Link>
             <Link href="/recommendations">
@@ -112,7 +112,7 @@ export default function LandingPage() {
                 alt="Profile setup illustration"
                 width={500}
                 height={400}
-                className="rounded-lg shadow-lg"
+                className="rounded-lg shadow-lg ml-20"
               />
             </div>
             <div className="space-y-6">
@@ -269,7 +269,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-12">
         <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 ml-20">
             <div>
               <h3 className="font-semibold mb-4">Unify</h3>
               <div className="flex items-center gap-2 mb-4">

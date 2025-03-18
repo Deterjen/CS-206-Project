@@ -7,6 +7,5 @@ seaborn~=0.13.2
 scipy~=1.15.2
 tqdm~=4.67.1
 scikit-surprise~=1.1.4
-sentence-transformers~=3.4.1
-hnswlib~=0.8.0
-jamaibase
+
+
