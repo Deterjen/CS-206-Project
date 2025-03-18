@@ -1,20 +1,19 @@
-import Image from "next/image"
-import Link from "next/link"
-import { ArrowRight, GraduationCap, Search, UserCircle } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, GraduationCap, Search, UserCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen items-center">
       {/* Navigation */}
-      <header className="border-b">
-        <div className="container flex h-16 items-center justify-between pl-8 pr-4">
+      <header className="border-b w-full">
+        <div className="container mx-auto flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6" />
             <span className="text-xl font-bold">Unify</span>
           </div>
-          <nav className="hidden md:flex items-center gap-x-8 pl-20">
+          <nav className="hidden md:flex items-center gap-6">
             <Link href="#features" className="text-sm font-medium hover:underline">
               Features
             </Link>
@@ -26,7 +25,7 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/auth">
+            <Link href="/profile/setup">
               <Button variant="outline">Sign Up</Button>
             </Link>
             <Link href="/recommendations">
@@ -37,8 +36,8 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 md:py-28">
-        <div className="container flex flex-col items-center text-center">
+      <section className="py-20 md:py-28 w-full">
+        <div className="container mx-auto flex flex-col items-center text-center">
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-3xl">
             Find Your Perfect University Match
           </h1>
@@ -63,38 +62,35 @@ export default function LandingPage() {
       </section>
 
       {/* Feature Highlights */}
-      <section id="features" className="py-20 bg-muted/50">
-        <div className="container">
+      <section id="features" className="py-20 bg-muted/50 w-full">
+        <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Why Choose Unify</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-background p-6 rounded-lg shadow-sm">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 place-items-center">
+            <div className="bg-background p-6 rounded-lg shadow-sm text-center max-w-md">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 mx-auto">
                 <UserCircle className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Comprehensive Profiles</h3>
               <p className="text-muted-foreground">
-                Create detailed academic profiles including GPA, extracurriculars, achievements, and personal
-                preferences.
+                Create detailed academic profiles including GPA, extracurriculars, achievements, and personal preferences.
               </p>
             </div>
-            <div className="bg-background p-6 rounded-lg shadow-sm">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <div className="bg-background p-6 rounded-lg shadow-sm text-center max-w-md">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 mx-auto">
                 <Search className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Smart Recommendations</h3>
               <p className="text-muted-foreground">
-                Our algorithm matches your profile with universities that align with your academic strengths and
-                personal goals.
+                Our algorithm matches your profile with universities that align with your academic strengths and personal goals.
               </p>
             </div>
-            <div className="bg-background p-6 rounded-lg shadow-sm">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <div className="bg-background p-6 rounded-lg shadow-sm text-center max-w-md">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 mx-auto">
                 <GraduationCap className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Detailed Insights</h3>
               <p className="text-muted-foreground">
-                Get personalized insights on why each university is a good match, including benefits and potential
-                drawbacks.
+                Get personalized insights on why each university is a good match, including benefits and potential drawbacks.
               </p>
             </div>
           </div>
@@ -102,17 +98,17 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-20">
-        <div className="container">
+      <section id="how-it-works" className="py-20 w-full">
+        <div className="container mx-auto px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How It Works</h2>
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-12 items-center justify-items-center">
             <div>
               <Image
                 src="/placeholder.svg?height=400&width=500"
                 alt="Profile setup illustration"
                 width={500}
                 height={400}
-                className="rounded-lg shadow-lg ml-20"
+                className="rounded-lg shadow-lg"
               />
             </div>
             <div className="space-y-6">
@@ -166,19 +162,29 @@ export default function LandingPage() {
       </section>
 
       {/* University Showcase */}
-      <section className="py-20 bg-muted/50">
-        <div className="container">
+      <section className="py-20 bg-muted/50 w-full">
+        <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">Find Your Perfect Match</h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-16">
             Our platform connects you with universities that align with your academic profile and personal goals.
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 place-items-center">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-background p-4 rounded-lg shadow-sm flex flex-col items-center">
-                <div className="h-16 w-16 rounded-full bg-muted mb-4 flex items-center justify-center">
-                  <Image src={`/placeholder.svg?text=Uni${i}`} alt={`University ${i}`} width={40} height={40} />
+              <div
+                key={i}
+                className="bg-background p-10 rounded-lg shadow-sm flex flex-col items-center"
+                style={{ minHeight: "300px", maxWidth: "300px" }} // Explicit inline styles as fallback
+              >
+                <div className="h-40 w-40 rounded-full bg-muted mb-8 flex items-center justify-center">
+                  <Image
+                    src={`/images/school.svg?text=Uni${i}`}
+                    alt={`University ${i}`}
+                    width={80}
+                    height={80}
+                    className="rounded-full"
+                  />
                 </div>
-                <h3 className="text-center font-medium">University {i}</h3>
+                <h3 className="text-center font-medium text-xl">University {i}</h3>
               </div>
             ))}
           </div>
@@ -194,10 +200,10 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="py-20">
-        <div className="container">
+      <section id="testimonials" className="py-20 w-full">
+        <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">What Our Users Say</h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-8 place-items-center">
             {[
               {
                 name: "Alex Johnson",
@@ -251,8 +257,8 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-primary text-primary-foreground">
-        <div className="container text-center">
+      <section className="py-20 bg-primary text-primary-foreground w-full">
+        <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Perfect University?</h2>
           <p className="text-xl mb-10 max-w-2xl mx-auto opacity-90">
             Create your profile today and get personalized university recommendations.
@@ -267,18 +273,18 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-12">
-        <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 ml-20">
-            <div>
+      <footer className="border-t py-12 w-full">
+        <div className="container mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 place-items-center">
+            <div className="text-center">
               <h3 className="font-semibold mb-4">Unify</h3>
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-4 justify-center">
                 <GraduationCap className="h-5 w-5" />
                 <span className="font-medium">Unify</span>
               </div>
               <p className="text-sm text-muted-foreground">Helping students find their perfect university match.</p>
             </div>
-            <div>
+            <div className="text-center">
               <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-sm">
                 <li>
@@ -298,7 +304,7 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
-            <div>
+            <div className="text-center">
               <h3 className="font-semibold mb-4">Resources</h3>
               <ul className="space-y-2 text-sm">
                 <li>
@@ -318,7 +324,7 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
-            <div>
+            <div className="text-center">
               <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-sm">
                 <li>
@@ -345,5 +351,5 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
