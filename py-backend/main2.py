@@ -109,4 +109,4 @@ if __name__ == '__main__':
     # Pass the extracted data to the generate_justification method
     justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
                                                                   recommendation_details['similar_students'])
-    logging.info(f"Justification: {justification}")
+    logging.info(f"\nJustification: \n{justification}")
