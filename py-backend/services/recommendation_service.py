@@ -32,6 +32,7 @@ class UniversityRecommendationService:
     def initialize_recommender(self, category_weights: Optional[Dict[str, float]] = None):
         """
         Initialize the recommendation model with data from the database.
+        Loads all necessary data in bulk to minimize database queries.
 
         Args:
             category_weights: Optional custom weights for recommendation categories
@@ -40,8 +41,7 @@ class UniversityRecommendationService:
         if category_weights:
             self.recommender = UniversityRecommender(category_weights=category_weights)
 
-        # Load all necessary data from the database in a single operation
-        # This dramatically reduces database calls during recommendation
+        # Load all necessary data in bulk (3-4 queries max)
         self._load_all_data()
 
         # Provide this data to the recommender
@@ -51,8 +51,15 @@ class UniversityRecommendationService:
             list(self._programs_cache.values())
         )
 
+        logger.info(f"Recommender initialized with {len(self._universities_cache)} universities, "
+                    f"{len(self._programs_cache)} programs, and "
+                    f"{len(self._existing_students_cache)} student profiles")
+
     def _load_all_data(self):
-        """Load and cache all necessary data from the database in an optimized way"""
+        """
+        Load and cache all necessary data from the database in an optimized way.
+        This method loads entire datasets with minimal queries.
+        """
         # Clear existing caches
         self._universities_cache = {}
         self._programs_cache = {}
@@ -62,108 +69,46 @@ class UniversityRecommendationService:
         logger.info("Loading all universities...")
         universities = self.db.get_universities(limit=1000)
         self._universities_cache = {u["id"]: u for u in universities}
+        logger.info(f"Loaded {len(universities)} universities")
 
         # 2. Load all programs in a single query
         logger.info("Loading all programs...")
         programs = self.db.get_programs(limit=1000)
         self._programs_cache = {p["id"]: p for p in programs}
+        logger.info(f"Loaded {len(programs)} programs")
 
-        # 3. Load all existing students with optimized queries
+        # 3. Load representative sample of existing students with optimized queries
         logger.info("Loading existing student profiles...")
         self._load_existing_students_optimized()
 
     def _load_existing_students_optimized(self):
         """
-        Load all existing students with optimized batch queries.
-        This version uses a university-balanced approach to ensure diverse representation.
+        Load a balanced sample of existing students with minimal database queries.
+        Uses batch loading to reduce the number of queries dramatically.
         """
-        # First, get a count of students per university
-        university_counts_response = self.db.supabase.rpc(
-            'get_university_student_counts'  # We'll create this stored procedure
-        ).execute()
+        # Get a balanced sample of student IDs across universities
+        logger.info("Getting balanced student sample across universities...")
+        student_ids = self.db.get_balanced_student_sample(students_per_university=50)
 
-        university_counts = university_counts_response.data
+        total_students = len(student_ids)
+        logger.info(f"Selected {total_students} diverse student profiles")
 
-        # If RPC is not available, we can use this fallback SQL query method
-        if not university_counts:
-            university_counts_response = self.db.supabase.table("existing_students") \
-                .select("university_id, count(*)") \
-                .group_by("university_id") \
-                .execute()
-            university_counts = university_counts_response.data
-
-        # Calculate appropriate sample size for each university for better balance
-        total_to_load = 2000  # Limit total number of students loaded for memory efficiency
-        universities = len(university_counts)
-        base_per_university = total_to_load // universities
-
-        # Get balanced sample of student IDs from each university
-        all_student_ids = []
-
-        for uni_count in university_counts:
-            uni_id = uni_count.get('university_id')
-            count = uni_count.get('count')
-
-            # Sample size shouldn't exceed available students
-            sample_size = min(count, base_per_university)
-
-            # Get sample of student IDs from this university
-            sample_response = self.db.supabase.table("existing_students") \
-                .select("id") \
-                .eq("university_id", uni_id) \
-                .limit(sample_size) \
-                .execute()
-
-            # Add student IDs to our list
-            student_ids_from_uni = [s.get('id') for s in sample_response.data]
-            all_student_ids.extend(student_ids_from_uni)
-
-        # Shuffle the IDs to avoid any potential ordering bias
-        import random
-        random.shuffle(all_student_ids)
-
-        # Now use the batch loading method with these IDs
-        batch_size = 50  # Adjust based on your database performance
-        total_students = len(all_student_ids)
-
-        logger.info(f"Loading {total_students} balanced student profiles in batches of {batch_size}...")
-
-        # Load sections in batches to minimize database roundtrips
+        # Process students in batches to avoid any potential memory issues
+        batch_size = 50
         for i in range(0, total_students, batch_size):
-            batch_ids = all_student_ids[i:i + batch_size]
-            logger.info(f"Loading student batch {i + 1}-{min(i + batch_size, total_students)}...")
+            batch_ids = student_ids[i:i + batch_size]
+            logger.info(f"Loading student batch {i + 1}-{min(i + batch_size, total_students)} of {total_students}...")
 
-            # Load core student data
-            core_data = self._batch_load_section("existing_students", batch_ids)
+            # Load complete student data with a minimal number of queries
+            student_batch = self.db.get_complete_existing_students_batch(batch_ids)
 
-            # Load all sections with a single query per section
-            sections = {
-                "university_info": self._batch_load_section("existing_students_university_info", batch_ids),
-                "academic": self._batch_load_section("existing_students_academic", batch_ids),
-                "social": self._batch_load_section("existing_students_social", batch_ids),
-                "career": self._batch_load_section("existing_students_career", batch_ids),
-                "financial": self._batch_load_section("existing_students_financial", batch_ids),
-                "facilities": self._batch_load_section("existing_students_facilities", batch_ids),
-                "reputation": self._batch_load_section("existing_students_reputation", batch_ids),
-                "personal_fit": self._batch_load_section("existing_students_personal_fit", batch_ids),
-                "selection_criteria": self._batch_load_section("existing_students_selection_criteria", batch_ids),
-                "additional_insights": self._batch_load_section("existing_students_additional_insights", batch_ids)
-            }
+            # Process each student and convert to flat format for the recommender
+            for student_id, student_data in student_batch.items():
+                if "core" in student_data:  # Make sure we have the core data
+                    flat_student = self._flatten_existing_student(student_data)
+                    self._existing_students_cache[student_id] = flat_student
 
-            # Combine and process each student
-            for core in core_data:
-                student_id = core["id"]
-                student_data = {"core": core}
-
-                # Add each section data
-                for section_name, section_data in sections.items():
-                    student_section = next((s for s in section_data if s["student_id"] == student_id), None)
-                    if student_section:
-                        student_data[section_name] = student_section
-
-                # Flatten the student data for the recommender
-                flat_student = self._flatten_existing_student(student_data)
-                self._existing_students_cache[student_id] = flat_student
+        logger.info(f"Successfully loaded {len(self._existing_students_cache)} complete student profiles")
 
     def _batch_load_section(self, table_name, student_ids):
         """Load a section of student data for multiple students at once"""
@@ -203,6 +148,28 @@ class UniversityRecommendationService:
         for section in ["university_info", "academic", "social", "career",
                         "financial", "facilities", "reputation", "personal_fit",
                         "selection_criteria", "additional_insights"]:
+            if section in student_data and student_data[section]:
+                for key, value in student_data[section].items():
+                    if key not in ["id", "student_id", "created_at"]:
+                        flat_data[key] = value
+
+        return flat_data
+
+    def _flatten_aspiring_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Flatten a nested aspiring student profile for the recommender.
+
+        Args:
+            student_data: Nested dictionary with aspiring student data
+
+        Returns:
+            Flat dictionary with all attributes
+        """
+        flat_data = {}
+
+        # Copy data from each section
+        for section in ["core", "academic", "social", "career", "financial",
+                        "geographic", "facilities", "reputation", "personal_fit"]:
             if section in student_data and student_data[section]:
                 for key, value in student_data[section].items():
                     if key not in ["id", "student_id", "created_at"]:
@@ -350,46 +317,30 @@ class UniversityRecommendationService:
 
     def get_aspiring_student_profile(self, student_id: int) -> Dict[str, Any]:
         """
-        Get a complete aspiring student profile in a format suitable for the recommender.
+        Get a complete aspiring student profile for the recommender.
+        Optimized to use a single query and return a flat structure.
 
         Args:
             student_id: ID of the aspiring student
 
         Returns:
-            A flat dictionary with all student attributes
+            Flat dictionary with all student attributes
         """
-        # Get all the data from the database
-        profile_data = {}
+        # Get the complete profile data with a single optimized query
+        profile_data = self.db.get_aspiring_student_complete(student_id)
 
-        # Get core data in a single query
-        core_response = self.db.supabase.table("aspiring_students").select("*").eq("id", student_id).limit(1).execute()
-        if not core_response.data:
+        if not profile_data:
             raise ValueError(f"Aspiring student with ID {student_id} not found")
 
-        # Get all sections in a more efficient way
-        sections = [
-            "academic", "social", "career", "financial",
-            "geographic", "facilities", "reputation", "personal_fit"
-        ]
+        # Convert to flat structure for the recommender
+        flat_profile = self._flatten_aspiring_student(profile_data)
 
-        for section in sections:
-            table_name = f"aspiring_students_{section}"
-            section_response = self.db.supabase.table(table_name).select("*").eq("student_id", student_id).limit(
-                1).execute()
-
-            if section_response.data:
-                # Extract all fields except id and student_id
-                section_data = section_response.data[0]
-                for key, value in section_data.items():
-                    if key not in ["id", "student_id", "created_at"]:
-                        profile_data[key] = value
-
-        return profile_data
+        return flat_profile
 
     def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10):
         """
         Generate university recommendations for an aspiring student.
-        This optimized version ensures diverse university recommendations.
+        Uses in-memory processing and minimal database queries.
 
         Args:
             aspiring_student_id: ID of the aspiring student
@@ -398,132 +349,44 @@ class UniversityRecommendationService:
         Returns:
             List of university recommendations with scores
         """
-        # Get the aspiring student's profile
+        # Get the aspiring student's profile (1 query)
+        logger.info(f"Fetching aspiring student profile for ID {aspiring_student_id}")
         aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
 
-        # Generate recommendations using the recommender
+        # Generate recommendations using the in-memory recommender (0 queries)
+        logger.info("Generating recommendations using in-memory processing")
         raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
 
-        # Log stats for monitoring
+        # Log stats
         unique_universities = len(raw_recommendations)
-        logger.info(
-            f"Generated {unique_universities} unique university recommendations for student {aspiring_student_id}")
+        logger.info(f"Generated {unique_universities} unique university recommendations")
 
-        # Process and save recommendations in a batch operation
-        recommendation_records = []
-        for rec in raw_recommendations:
-            # Prepare recommendation data without similar students
-            rec_data = {
-                "aspiring_student_id": aspiring_student_id,
-                "university_id": rec["university_id"],
-                "overall_score": rec["overall_score"],
-                "academic_score": rec["academic_score"],
-                "social_score": rec["social_score"],
-                "financial_score": rec["financial_score"],
-                "career_score": rec["career_score"],
-                "geographic_score": rec["geographic_score"],
-                "facilities_score": rec["facilities_score"],
-                "reputation_score": rec["reputation_score"],
-                "personal_fit_score": rec["personal_fit_score"]
-            }
-            recommendation_records.append(rec_data)
+        # Save all recommendations and similar students in a batch (1-2 queries)
+        logger.info("Saving recommendations and similar students in batch")
+        saved_recommendations = self.db.save_recommendations_batch(aspiring_student_id, raw_recommendations)
 
-        # Insert all recommendations in a single batch
-        if recommendation_records:
-            rec_response = self.db.supabase.table("recommendations").insert(recommendation_records).execute()
-            saved_recommendations = rec_response.data
-
-            # Prepare similar students as one large batch
-            similar_student_records = []
-
-            # For each recommendation, save its similar students
-            for i, rec in enumerate(raw_recommendations):
-                recommendation_id = saved_recommendations[i]["id"]
-
-                for student in rec.get("similar_students", []):
-                    student_data = {
-                        "recommendation_id": recommendation_id,
-                        "existing_student_id": student["student_id"],
-                        "similarity_score": student["overall_similarity"],
-                        "academic_similarity": student.get("academic_similarity", 0),
-                        "social_similarity": student.get("social_similarity", 0),
-                        "financial_similarity": student.get("financial_similarity", 0),
-                        "career_similarity": student.get("career_similarity", 0),
-                        "geographic_similarity": student.get("geographic_similarity", 0),
-                        "facilities_similarity": student.get("facilities_similarity", 0),
-                        "reputation_similarity": student.get("reputation_similarity", 0),
-                        "personal_fit_similarity": student.get("personal_fit_similarity", 0)
-                    }
-                    similar_student_records.append(student_data)
-
-            # Save all similar students in one batch operation
-            if similar_student_records:
-                self.db.supabase.table("similar_students").insert(similar_student_records).execute()
-
-            # Log performance data
-            self.db.supabase.table("recommendation_performance_logs").insert({
-                "aspiring_student_id": aspiring_student_id,
-                "universities_recommended": len(saved_recommendations),
-                "top_similarity_score": saved_recommendations[0]["overall_score"] if saved_recommendations else 0,
-                "average_similarity_score": sum(r["overall_score"] for r in saved_recommendations) / len(
-                    saved_recommendations) if saved_recommendations else 0,
-                "metadata": {
-                    "algorithm_version": "2.0",
-                    "categories_used": list(self.recommender.category_weights.keys())
-                }
-            }).execute()
-
-            return saved_recommendations
-
-        return []
+        logger.info(f"Successfully saved {len(saved_recommendations)} recommendations")
+        return saved_recommendations
 
     def get_similar_students(self, recommendation_id: int) -> List[Dict[str, Any]]:
         """
-        Get all similar students for a specific recommendation.
+        Get similar students for a recommendation.
+        Note: This is now handled by get_recommendation_with_details for efficiency.
 
         Args:
             recommendation_id: ID of the recommendation
 
         Returns:
-            List of similar students with detailed similarity scores
+            List of similar students
         """
-        # Get similar students from the database with an optimized query
-        response = self.db.supabase.table("similar_students") \
-            .select("*, existing_students(*)") \
-            .eq("recommendation_id", recommendation_id) \
-            .execute()
-
-        similar_students = response.data
-
-        # Transform the data to match the expected format
-        formatted_students = []
-        for student in similar_students:
-            # Get university for this student from cache or database
-            student_university_id = student["existing_students"]["university_id"]
-            university = self.get_university_by_id(student_university_id)
-
-            # Create the formatted student object
-            formatted_student = {
-                "student_id": student["existing_student_id"],
-                "university_id": student_university_id,
-                "university_name": university["name"],
-                "overall_similarity": student["similarity_score"],
-                "academic_similarity": student["academic_similarity"],
-                "social_similarity": student["social_similarity"],
-                "financial_similarity": student["financial_similarity"],
-                "career_similarity": student["career_similarity"],
-                "geographic_similarity": student["geographic_similarity"],
-                "facilities_similarity": student["facilities_similarity"],
-                "reputation_similarity": student["reputation_similarity"],
-                "personal_fit_similarity": student["personal_fit_similarity"]
-            }
-            formatted_students.append(formatted_student)
-
-        return formatted_students
+        # Get recommendation details which includes similar students
+        details = self.db.get_recommendation_with_details(recommendation_id)
+        return details.get("similar_students", [])
 
     def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
         """
-        Get comprehensive details for a recommendation including university and similar students.
+        Get comprehensive details for a recommendation.
+        Uses a single optimized query.
 
         Args:
             recommendation_id: ID of the recommendation
@@ -531,35 +394,12 @@ class UniversityRecommendationService:
         Returns:
             Comprehensive recommendation data
         """
-        # Get the recommendation
-        recommendation_response = self.db.supabase.table("recommendations").select("*").eq("id",
-                                                                                           recommendation_id).limit(
-            1).execute()
-
-        if not recommendation_response.data:
-            raise ValueError(f"Recommendation with ID {recommendation_id} not found")
-
-        recommendation = recommendation_response.data[0]
-
-        # Get the university
-        university_id = recommendation["university_id"]
-        university = self.get_university_by_id(university_id)
-
-        # Get similar students with formatted structure
-        similar_students = self.get_similar_students(recommendation_id)
-
-        # Combine all data
-        result = {
-            "recommendation": recommendation,
-            "university": university,
-            "similar_students": similar_students
-        }
-
-        return result
+        return self.db.get_recommendation_with_details(recommendation_id)
 
     def get_recommendations_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
-        Get all recommendations for an aspiring student with university and similar student details.
+        Get all recommendations for an aspiring student with details.
+        Uses a minimal number of optimized queries.
 
         Args:
             aspiring_student_id: ID of the aspiring student
@@ -567,22 +407,7 @@ class UniversityRecommendationService:
         Returns:
             List of comprehensive recommendation data
         """
-        # Get all recommendations for this student
-        response = self.db.supabase.table("recommendations") \
-            .select("*") \
-            .eq("aspiring_student_id", aspiring_student_id) \
-            .order("overall_score", desc=True) \
-            .execute()
-
-        recommendations = response.data
-
-        # Get details for each recommendation
-        detailed_recommendations = []
-        for rec in recommendations:
-            detailed_rec = self.get_recommendation_details(rec["id"])
-            detailed_recommendations.append(detailed_rec)
-
-        return detailed_recommendations
+        return self.db.get_recommendations_with_details(aspiring_student_id)
 
     def collect_feedback(self, recommendation_id: int, rating: int, text: str) -> Dict[str, Any]:
         """
@@ -601,6 +426,8 @@ class UniversityRecommendationService:
     def refresh_recommender(self):
         """
         Refresh the recommender with the latest data from the database.
-        Call this when significant changes have been made to the data.
+        Call this periodically to ensure recommendations stay current.
         """
+        logger.info("Refreshing recommender data...")
         self.initialize_recommender(self.recommender.category_weights)
+        logger.info("Recommender data refresh complete")
