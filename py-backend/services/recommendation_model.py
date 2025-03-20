@@ -441,7 +441,7 @@ class UniversityRecommender:
     def recommend_universities(self, aspiring_profile, top_n=10):
         """Recommend universities based on aspiring student profile"""
         # Find similar students
-        similar_students = self.find_similar_students(aspiring_profile)
+        similar_students = self.find_similar_students(aspiring_profile, top_n=50)
 
         # Aggregate by university
         university_scores = {}

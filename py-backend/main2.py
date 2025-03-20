@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
     # Example of saving comprehensive data to file for debugging
     with open("recommendation_data.json", "w") as f:
-        json.dump(recommendation_details, f, indent=2)
+        json.dump(all_recommendations, f, indent=2)
 
     # Get Justification
     logging.info("Getting justification.")
