@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 class UniversityRecommendationService:
     """
-    Service class that connects the database client with the recommendation model.
+    Enhanced service class that connects the database client with the recommendation model.
     This class orchestrates the recommendation process, managing data flow between
-    the database and the recommender model.
+    the database and the recommender model with improved efficiency and accuracy.
     """
 
     def __init__(self, supabase_client: SupabaseDB):
@@ -32,7 +32,7 @@ class UniversityRecommendationService:
     def initialize_recommender(self, category_weights: Optional[Dict[str, float]] = None):
         """
         Initialize the recommendation model with data from the database.
-        Loads all necessary data in bulk to minimize database queries.
+        Optimized to load a representative sample of data in minimal queries.
 
         Args:
             category_weights: Optional custom weights for recommendation categories
@@ -58,7 +58,8 @@ class UniversityRecommendationService:
     def _load_all_data(self):
         """
         Load and cache all necessary data from the database in an optimized way.
-        This method loads entire datasets with minimal queries.
+        Uses a representative sample approach for student profiles to ensure
+        diversity and representativeness while minimizing database load.
         """
         # Clear existing caches
         self._universities_cache = {}
@@ -77,29 +78,27 @@ class UniversityRecommendationService:
         self._programs_cache = {p["id"]: p for p in programs}
         logger.info(f"Loaded {len(programs)} programs")
 
-        # 3. Load representative sample of existing students with optimized queries
-        logger.info("Loading existing student profiles...")
-        self._load_existing_students_optimized()
+        # 3. Load a diverse, representative sample of existing students
+        logger.info("Loading representative student profiles for vector similarity index...")
+        self._load_representative_student_sample()
 
-    def _load_existing_students_optimized(self):
+    def _load_representative_student_sample(self):
         """
-        Load a balanced sample of existing students with minimal database queries.
-        Uses batch loading to reduce the number of queries dramatically.
+        Load a representative sample of student profiles for recommendation
         """
-        # Get a balanced sample of student IDs across universities
-        logger.info("Getting balanced student sample across universities...")
-        student_ids = self.db.get_balanced_student_sample(students_per_university=50)
+        # Get a balanced and diverse sample across universities and programs
+        student_ids = self.db.get_balanced_student_sample(students_per_university=100)
 
         total_students = len(student_ids)
-        logger.info(f"Selected {total_students} diverse student profiles")
+        logger.info(f"Selected {total_students} diverse student profiles for vector indexing")
 
-        # Process students in batches to avoid any potential memory issues
-        batch_size = 50
+        # Process in batches to avoid memory issues
+        batch_size = 100
         for i in range(0, total_students, batch_size):
             batch_ids = student_ids[i:i + batch_size]
             logger.info(f"Loading student batch {i + 1}-{min(i + batch_size, total_students)} of {total_students}...")
 
-            # Load complete student data with a minimal number of queries
+            # Get complete data for these students with minimal queries
             student_batch = self.db.get_complete_existing_students_batch(batch_ids)
 
             # Process each student and convert to flat format for the recommender
@@ -109,23 +108,6 @@ class UniversityRecommendationService:
                     self._existing_students_cache[student_id] = flat_student
 
         logger.info(f"Successfully loaded {len(self._existing_students_cache)} complete student profiles")
-
-    def _batch_load_section(self, table_name, student_ids):
-        """Load a section of student data for multiple students at once"""
-        # For core table, use 'id in (...)' filter
-        if table_name == "existing_students":
-            response = self.db.supabase.table(table_name) \
-                .select("*") \
-                .in_("id", student_ids) \
-                .execute()
-        # For section tables, use 'student_id in (...)' filter
-        else:
-            response = self.db.supabase.table(table_name) \
-                .select("*") \
-                .in_("student_id", student_ids) \
-                .execute()
-
-        return response.data
 
     def _flatten_existing_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -340,7 +322,8 @@ class UniversityRecommendationService:
     def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10):
         """
         Generate university recommendations for an aspiring student.
-        Uses in-memory processing and minimal database queries.
+        Uses vector similarity search for more accurate recommendations
+        with minimal database queries.
 
         Args:
             aspiring_student_id: ID of the aspiring student
@@ -353,8 +336,8 @@ class UniversityRecommendationService:
         logger.info(f"Fetching aspiring student profile for ID {aspiring_student_id}")
         aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
 
-        # Generate recommendations using the in-memory recommender (0 queries)
-        logger.info("Generating recommendations using in-memory processing")
+        # Generate recommendations using the in-memory recommender with improved vector similarity (0 queries)
+        logger.info("Generating recommendations using vector similarity search")
         raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
 
         # Log stats

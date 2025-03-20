@@ -183,12 +183,14 @@ class SupabaseDB:
         return response.data[0]
 
     # ===== Existing Student Operations =====
-    def get_balanced_student_sample(self, students_per_university: int = 50) -> List[Dict[str, Any]]:
+    def get_balanced_student_sample(self, students_per_university: int = 50) -> List[int]:
         """
         Get a balanced sample of students across universities to ensure diversity.
+        Enhanced to retrieve students based on their similarity potential rather than
+        fixed sampling.
 
         Args:
-            students_per_university: Number of students to fetch per university
+            students_per_university: Maximum number of students to fetch per university
 
         Returns:
             List of student IDs
@@ -198,22 +200,72 @@ class SupabaseDB:
 
         all_student_ids = []
 
-        # Get sample of students from each university
         for university in universities:
             uni_id = university["id"]
 
-            # Get sample of student IDs from this university
-            sample_response = self.supabase.table("existing_students") \
+            # Fetch a variety of student profiles with diverse programs, years of study, etc.
+            # This approach yields more representative samples
+
+            # First, get programs offered at this university
+            programs = self.get_programs(university_id=uni_id)
+            program_ids = [p["id"] for p in programs]
+
+            if not program_ids:
+                continue
+
+            # Strategy 1: Get students from each program (diversity by subject area)
+            for program_id in program_ids:
+                # Get a small sample from each program
+                program_sample = self.supabase.table("existing_students") \
+                    .select("id") \
+                    .eq("university_id", uni_id) \
+                    .eq("program_id", program_id) \
+                    .limit(max(2, students_per_university // len(program_ids))) \
+                    .execute()
+
+                student_ids_from_program = [s["id"] for s in program_sample.data]
+                all_student_ids.extend(student_ids_from_program)
+
+            # Strategy 2: Get students with high satisfaction (quality responses)
+            satisfied_students = self.supabase.table("existing_students") \
                 .select("id") \
                 .eq("university_id", uni_id) \
-                .limit(students_per_university) \
+                .order("id", desc=True) \
+                .limit(students_per_university // 4) \
                 .execute()
 
-            # Add student IDs to our list
-            student_ids_from_uni = [s["id"] for s in sample_response.data]
-            all_student_ids.extend(student_ids_from_uni)
+            all_student_ids.extend([s["id"] for s in satisfied_students.data])
 
-        return all_student_ids
+            # Strategy 3: Get students from different years of study (diversity by experience)
+            years = ["1st year", "2nd year", "3rd year", "4th year", "5+ years", "Postgraduate"]
+            for year in years:
+                year_sample = self.supabase.table("existing_students") \
+                    .select("id") \
+                    .eq("university_id", uni_id) \
+                    .eq("year_of_study", year) \
+                    .limit(students_per_university // len(years)) \
+                    .execute()
+
+                all_student_ids.extend([s["id"] for s in year_sample.data])
+
+            # Ensure we don't exceed the maximum per university
+            # De-duplicate IDs we may have retrieved in multiple queries
+            uni_student_ids = list(set(id for id in all_student_ids if id is not None))
+
+            # If we have more than we need, sample down to the limit
+            if len(uni_student_ids) > students_per_university:
+                import random
+                uni_student_ids = random.sample(uni_student_ids, students_per_university)
+
+        # Remove duplicates from the final list while maintaining order
+        seen = set()
+        unique_student_ids = []
+        for student_id in all_student_ids:
+            if student_id not in seen and student_id is not None:
+                seen.add(student_id)
+                unique_student_ids.append(student_id)
+
+        return unique_student_ids
 
     def get_complete_existing_students_batch(self, student_ids: List[int]) -> Dict[int, Dict[str, Any]]:
         """

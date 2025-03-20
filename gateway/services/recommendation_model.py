@@ -1,15 +1,18 @@
+import logging
+
 import hnswlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+logger = logging.getLogger(__name__)
+
 
 class UniversityRecommender:
     """
-    A model for generating university recommendations based on similarity between
-    aspiring student profiles and existing student experiences.
+    Improved recommender model for generating university recommendations based on similarity
+    between aspiring student profiles and existing student experiences.
 
-    This class handles only the algorithmic aspects of recommendation without
-    knowledge of data persistence.
+    Uses vector similarity search with HNSW for efficiently finding similar student profiles.
     """
 
     def __init__(self, category_weights=None):
@@ -39,8 +42,11 @@ class UniversityRecommender:
         self.existing_students = []
         self.programs = []
 
-        # HNSW indexes for text embeddings
+        # HNSW indexes
         self.text_indexes = {}
+        self.student_profile_index = None
+        self.student_vectors = []
+        self.student_ids = []
 
     def set_data(self, universities, existing_students, programs):
         """
@@ -57,6 +63,9 @@ class UniversityRecommender:
 
         # Build text embedding indexes
         self._build_text_indexes()
+
+        # Build student profile vector index
+        self._build_student_profile_index()
 
     def _build_text_indexes(self):
         """Build HNSW indexes for text fields for efficient similarity search"""
@@ -90,6 +99,262 @@ class UniversityRecommender:
                 'index': index,
                 'student_ids': [s.get('id') for s in self.existing_students if s.get(field)]
             }
+
+    def _build_student_profile_index(self):
+        """
+        Build an HNSW index for efficient similarity search across student profiles.
+        This creates a vector representation of each student profile and indexes it.
+        """
+        logger.info("Building student profile vector index...")
+
+        # Skip if no existing students
+        if not self.existing_students:
+            logger.warning("No existing students available to build profile index")
+            return
+
+        # Create vector representations for all student profiles
+        self.student_vectors = []
+        self.student_ids = []
+
+        for student in self.existing_students:
+            # Create a vector representation of the student profile
+            vector = self._create_student_vector(student)
+            if vector is not None:
+                self.student_vectors.append(vector)
+                self.student_ids.append(student.get('id'))
+
+        # Convert to numpy array
+        if not self.student_vectors:
+            logger.warning("No valid student vectors created")
+            return
+
+        vectors_array = np.array(self.student_vectors)
+
+        # Create HNSW index
+        if len(vectors_array) > 0:
+            dim = vectors_array.shape[1]
+            self.student_profile_index = hnswlib.Index(space='cosine', dim=dim)
+            self.student_profile_index.init_index(max_elements=len(vectors_array), ef_construction=200, M=16)
+            self.student_profile_index.add_items(vectors_array, np.arange(len(vectors_array)))
+            # Set ef (accuracy vs speed trade-off)
+            self.student_profile_index.set_ef(100)
+
+            logger.info(f"Built student profile index with {len(self.student_vectors)} vectors of dimension {dim}")
+
+    def _create_student_vector(self, student):
+        """
+        Create a vector representation of a student profile based on various attributes.
+
+        Args:
+            student: Student profile data
+
+        Returns:
+            Vector representation as a numpy array
+        """
+        # Define features to include in the vector
+        features = []
+
+        # Academic features
+        if 'learning_styles' in student:
+            # One-hot encoding for learning styles
+            learning_styles = [
+                'Lecture-based', 'Hands-on/Practical', 'Project-based',
+                'Research-oriented', 'Seminar-based', 'Online/Remote'
+            ]
+            for style in learning_styles:
+                features.append(1.0 if style in student.get('learning_styles', []) else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 6)
+
+        # Teaching quality
+        features.append(student.get('teaching_quality', 5) / 10.0)
+
+        # Professor accessibility
+        features.append(student.get('professor_accessibility', 5) / 10.0)
+
+        # Social features
+        if 'extracurricular_activities' in student:
+            # One-hot encoding for activities
+            activities = [
+                'Sports', 'Arts & Culture', 'Academic Clubs',
+                'Community Service', 'Professional/Career Clubs'
+            ]
+            for activity in activities:
+                features.append(1.0 if activity in student.get('extracurricular_activities', []) else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 5)
+
+        # Weekly hours mapping
+        hours_mapping = {
+            '0 (None)': 0.0,
+            '1–5 hours': 0.2,
+            '6–10 hours': 0.4,
+            '11–15 hours': 0.6,
+            '16–20 hours': 0.8,
+            '20+ hours': 1.0
+        }
+        features.append(hours_mapping.get(student.get('weekly_extracurricular_hours', '0 (None)'), 0.0))
+
+        # Career features
+        features.append(student.get('job_placement_support', 5) / 10.0)
+        features.append(1.0 if student.get('internship_experience', False) else 0.0)
+        features.append(student.get('alumni_network_strength', 5) / 10.0)
+
+        # Financial features
+        features.append(student.get('affordability', 5) / 10.0)
+        features.append(1.0 if student.get('received_financial_aid', False) else 0.0)
+
+        # Facilities features
+        features.append(student.get('facilities_quality', 5) / 10.0)
+
+        # Reputation features
+        features.append(student.get('employer_value_perception', 5) / 10.0)
+
+        # Personal fit features
+        features.append(student.get('personality_match', 5) / 10.0)
+
+        # Personality traits
+        if 'typical_student_traits' in student:
+            # One-hot encoding for personality traits
+            traits = [
+                'Ambitious', 'Creative', 'Analytical', 'Collaborative',
+                'Competitive', 'Introverted', 'Extroverted', 'Independent'
+            ]
+            for trait in traits:
+                features.append(1.0 if trait in student.get('typical_student_traits', []) else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 8)
+
+        # Convert to numpy array
+        return np.array(features)
+
+    def _create_aspiring_student_vector(self, aspiring_profile):
+        """
+        Create a vector representation of an aspiring student profile.
+        This should be compatible with the existing student vectors.
+
+        Args:
+            aspiring_profile: Aspiring student profile data
+
+        Returns:
+            Vector representation as a numpy array
+        """
+        # Define features to include in the vector - must match _create_student_vector
+        features = []
+
+        # Academic features
+        if 'learning_style' in aspiring_profile:
+            # One-hot encoding for learning style
+            learning_styles = [
+                'Lecture-based', 'Hands-on/Practical', 'Project-based',
+                'Research-oriented', 'Seminar-based', 'Online/Remote'
+            ]
+            for style in learning_styles:
+                features.append(1.0 if style == aspiring_profile.get('learning_style', '') else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 6)
+
+        # Teaching quality expectation (default to mid-range)
+        features.append(0.5)
+
+        # Professor accessibility expectation (default to mid-range)
+        features.append(0.5)
+
+        # Social features
+        if 'interested_activities' in aspiring_profile:
+            # One-hot encoding for activities
+            activities = [
+                'Sports', 'Arts & Culture', 'Academic Clubs',
+                'Community Service', 'Professional/Career Clubs'
+            ]
+            for activity in activities:
+                features.append(1.0 if activity in aspiring_profile.get('interested_activities', []) else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 5)
+
+        # Weekly hours mapping
+        hours_mapping = {
+            '0 (None)': 0.0,
+            '1–5 hours': 0.2,
+            '6–10 hours': 0.4,
+            '11–15 hours': 0.6,
+            '16–20 hours': 0.8,
+            '20+ hours': 1.0
+        }
+        features.append(hours_mapping.get(aspiring_profile.get('weekly_extracurricular_hours', '0 (None)'), 0.0))
+
+        # Career features (default to importance values or mid-range)
+        features.append(aspiring_profile.get('internship_importance', 5) / 10.0)
+        features.append(1.0 if aspiring_profile.get('leadership_interest', False) else 0.0)
+        features.append(aspiring_profile.get('alumni_network_value', 5) / 10.0)
+
+        # Financial features
+        features.append(aspiring_profile.get('affordability_importance', 5) / 10.0)
+        features.append(1.0 if aspiring_profile.get('financial_aid_interest', False) else 0.0)
+
+        # Facilities features
+        features.append(aspiring_profile.get('modern_amenities_importance', 5) / 10.0)
+
+        # Reputation features
+        features.append(aspiring_profile.get('ranking_importance', 5) / 10.0)
+
+        # Personal fit features (default to mid-range)
+        features.append(0.5)
+
+        # Personality traits
+        if 'personality_traits' in aspiring_profile:
+            # One-hot encoding for personality traits
+            traits = [
+                'Ambitious', 'Creative', 'Analytical', 'Collaborative',
+                'Competitive', 'Introverted', 'Extroverted', 'Independent'
+            ]
+            for trait in traits:
+                features.append(1.0 if trait in aspiring_profile.get('personality_traits', []) else 0.0)
+        else:
+            # Pad with zeros if not available
+            features.extend([0.0] * 8)
+
+        # Convert to numpy array
+        return np.array(features)
+
+    def find_similar_students_vector(self, aspiring_profile, top_k=100):
+        """
+        Find the most similar students to an aspiring student using vector similarity.
+
+        Args:
+            aspiring_profile: Aspiring student profile
+            top_k: Number of similar students to return
+
+        Returns:
+            List of (student_id, similarity_score) tuples
+        """
+        if self.student_profile_index is None or len(self.student_vectors) == 0:
+            logger.warning("Student profile index not available for similarity search")
+            return []
+
+        # Create vector for aspiring student
+        aspiring_vector = self._create_aspiring_student_vector(aspiring_profile)
+
+        # Find nearest neighbors
+        k = min(top_k, len(self.student_vectors))
+        labels, distances = self.student_profile_index.knn_query(aspiring_vector.reshape(1, -1), k=k)
+
+        # Convert to student IDs and similarity scores
+        similar_students = []
+        for i in range(len(labels[0])):
+            student_idx = labels[0][i]
+            distance = distances[0][i]
+            student_id = self.student_ids[student_idx]
+            # Convert distance to similarity (1 - normalized distance)
+            similarity = 1.0 - min(1.0, distance)
+            similar_students.append((student_id, similarity))
+
+        return similar_students
 
     def compute_academic_similarity(self, aspiring_profile, existing_profile):
         """Calculate academic similarity based on field of study, learning style, etc."""
@@ -429,6 +694,218 @@ class UniversityRecommender:
             'personal_fit_similarity': personal_sim
         }
 
+    def recommend_universities_vector_based(self, aspiring_profile, top_n=10):
+        """
+        Generate university recommendations using vector similarity search.
+
+        Args:
+            aspiring_profile: Aspiring student profile data
+            top_n: Number of universities to recommend
+
+        Returns:
+            List of university recommendations with scores
+        """
+        logger.info("Generating vector-based recommendations")
+
+        # 1. FIND SIMILAR STUDENTS: Use vector similarity to find most similar students
+        similar_student_ids_scores = self.find_similar_students_vector(aspiring_profile, top_k=200)
+
+        if not similar_student_ids_scores:
+            logger.warning("No similar students found using vector search, falling back to standard method")
+            # Fall back to original method if no similar students found
+            return self._prefilter_universities_recommend(aspiring_profile, top_n)
+
+        logger.info(f"Found {len(similar_student_ids_scores)} similar students using vector similarity")
+
+        # 2. GET DETAILED STUDENT DATA: Retrieve student data for the similar students
+        similar_students_data = []
+        student_id_to_similarity = dict(similar_student_ids_scores)
+
+        for student_id, _ in similar_student_ids_scores:
+            student = next((s for s in self.existing_students if s.get('id') == student_id), None)
+            if student:
+                # Add vector similarity score
+                student['vector_similarity'] = student_id_to_similarity[student_id]
+                similar_students_data.append(student)
+
+        # 3. GROUP BY UNIVERSITY: Aggregate scores by university
+        university_scores = {}
+        university_students = {}
+
+        for student in similar_students_data:
+            university_id = student.get('university_id')
+
+            # Skip if missing university ID
+            if not university_id:
+                continue
+
+            # Calculate detailed similarity scores
+            similarity_data = self.compute_student_similarity(aspiring_profile, student)
+
+            # Add vector similarity to the data
+            similarity_data['vector_similarity'] = student.get('vector_similarity', 0.0)
+
+            # Update university trackers
+            if university_id not in university_scores:
+                university = next((u for u in self.universities if u.get('id') == university_id), None)
+                if not university:
+                    continue
+
+                university_scores[university_id] = {
+                    'university_id': university_id,
+                    'university_name': university.get('name', 'Unknown University'),
+                    'location': university.get('location', ''),
+                    'size': university.get('size', ''),
+                    'setting': university.get('setting', ''),
+                    'overall_score': 0.0,
+                    'academic_score': 0.0,
+                    'social_score': 0.0,
+                    'financial_score': 0.0,
+                    'career_score': 0.0,
+                    'geographic_score': 0.0,
+                    'facilities_score': 0.0,
+                    'reputation_score': 0.0,
+                    'personal_fit_score': 0.0,
+                    'student_count': 0,
+                    'similar_students': []
+                }
+                university_students[university_id] = []
+
+            # Add student to university's similar students list
+            university_students[university_id].append(similarity_data)
+
+            # Increment student count
+            university_scores[university_id]['student_count'] += 1
+
+        # 4. CALCULATE FINAL SCORES: Compute average scores and top similar students
+        for university_id, students in university_students.items():
+            # Sort students by overall similarity
+            students.sort(key=lambda x: x['overall_similarity'], reverse=True)
+
+            # Take top students per university (limited to 5)
+            top_students = students[:5]
+
+            if not top_students:
+                continue
+
+            # Calculate average scores from detailed similarities
+            university_scores[university_id]['overall_score'] = sum(
+                s['overall_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['academic_score'] = sum(
+                s['academic_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['social_score'] = sum(s['social_similarity'] for s in top_students) / len(
+                top_students)
+            university_scores[university_id]['financial_score'] = sum(
+                s['financial_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['career_score'] = sum(s['career_similarity'] for s in top_students) / len(
+                top_students)
+            university_scores[university_id]['geographic_score'] = sum(
+                s['geographic_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['facilities_score'] = sum(
+                s['facilities_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['reputation_score'] = sum(
+                s['reputation_similarity'] for s in top_students) / len(top_students)
+            university_scores[university_id]['personal_fit_score'] = sum(
+                s['personal_fit_similarity'] for s in top_students) / len(top_students)
+
+            # Set similar students (limited to top 3 for output)
+            university_scores[university_id]['similar_students'] = top_students[:3]
+
+            # Set matching_student_count for compatibility with existing code
+            university_scores[university_id]['matching_student_count'] = university_scores[university_id][
+                'student_count']
+
+        # Convert to list and sort by overall score
+        final_scores = list(university_scores.values())
+        final_scores.sort(key=lambda x: x['overall_score'], reverse=True)
+
+        logger.info(f"Generated {len(final_scores)} university recommendations based on vector similarity")
+
+        # Return top_n recommendations
+        return final_scores[:top_n]
+
+    def _prefilter_universities_recommend(self, aspiring_profile, top_n=10):
+        """
+        Legacy recommendation method as fallback, uses the original tier-based approach.
+        """
+        # TIER 1: FAST PRE-FILTERING
+        # First, quickly filter universities based on essential criteria
+        candidate_universities = self._prefilter_universities(aspiring_profile)
+
+        # Limit candidates to a reasonable number (adjust as needed)
+        max_candidates = min(30, len(candidate_universities))
+        candidate_universities = candidate_universities[:max_candidates]
+
+        # TIER 2: DETAILED EVALUATION
+        # Process each candidate university more thoroughly
+        university_scores = []
+
+        for uni_id, uni_metadata in candidate_universities:
+            university = next((u for u in self.universities if u.get('id') == uni_id), None)
+            if not university:
+                continue
+
+            # Find the students from this university
+            uni_students = [s for s in self.existing_students if s.get('university_id') == uni_id]
+
+            # If too many students, sample them (for efficiency)
+            sample_size = min(50, len(uni_students))
+            if len(uni_students) > sample_size:
+                import random
+                uni_students = random.sample(uni_students, sample_size)
+
+            # TIER 3: DETAILED STUDENT SIMILARITY
+            # Calculate full similarity scores for these students
+            student_similarities = []
+            for student in uni_students:
+                similarity_data = self.compute_student_similarity(aspiring_profile, student)
+                student_similarities.append(similarity_data)
+
+            # Skip if no similar students
+            if not student_similarities:
+                continue
+
+            # Sort by similarity and take top matches
+            student_similarities.sort(key=lambda x: x['overall_similarity'], reverse=True)
+            top_students = student_similarities[:3]
+
+            # Calculate average scores
+            avg_overall = sum(s['overall_similarity'] for s in top_students) / len(top_students)
+            avg_academic = sum(s['academic_similarity'] for s in top_students) / len(top_students)
+            avg_social = sum(s['social_similarity'] for s in top_students) / len(top_students)
+            avg_financial = sum(s['financial_similarity'] for s in top_students) / len(top_students)
+            avg_career = sum(s['career_similarity'] for s in top_students) / len(top_students)
+            avg_geographic = sum(s['geographic_similarity'] for s in top_students) / len(top_students)
+            avg_facilities = sum(s['facilities_similarity'] for s in top_students) / len(top_students)
+            avg_reputation = sum(s['reputation_similarity'] for s in top_students) / len(top_students)
+            avg_personal = sum(s['personal_fit_similarity'] for s in top_students) / len(top_students)
+
+            # Add to university scores
+            university_scores.append({
+                'university_id': uni_id,
+                'university_name': university.get('name', 'Unknown University'),
+                'location': university.get('location', ''),
+                'size': university.get('size', ''),
+                'setting': university.get('setting', ''),
+                'overall_score': avg_overall,
+                'academic_score': avg_academic,
+                'social_score': avg_social,
+                'financial_score': avg_financial,
+                'career_score': avg_career,
+                'geographic_score': avg_geographic,
+                'facilities_score': avg_facilities,
+                'reputation_score': avg_reputation,
+                'personal_fit_score': avg_personal,
+                'matching_student_count': len(top_students),
+                'similar_students': top_students
+            })
+
+        # Sort by overall score
+        university_scores.sort(key=lambda x: x['overall_score'], reverse=True)
+
+        # Return top_n universities
+        return university_scores[:top_n]
+
     def _prefilter_universities(self, aspiring_profile):
         """
         TIER 1: Quickly pre-filter universities based on essential criteria
@@ -487,86 +964,46 @@ class UniversityRecommender:
 
     def recommend_universities(self, aspiring_profile, top_n=10):
         """
-        A scalable three-tier approach to ensure diverse university recommendations
-        that performs efficiently even with a large number of universities.
+        Primary method to generate university recommendations.
+        Uses vector-based similarity search when possible, with fallback to tier-based approach.
+
+        Args:
+            aspiring_profile: Aspiring student profile data
+            top_n: Number of universities to recommend
+
+        Returns:
+            List of university recommendations with scores
         """
-        # TIER 1: FAST PRE-FILTERING
-        # First, quickly filter universities based on essential criteria
-        candidate_universities = self._prefilter_universities(aspiring_profile)
-
-        # Limit candidates to a reasonable number (adjust as needed)
-        max_candidates = min(30, len(candidate_universities))
-        candidate_universities = candidate_universities[:max_candidates]
-
-        # TIER 2: DETAILED EVALUATION
-        # Process each candidate university more thoroughly
-        university_scores = []
-
-        for uni_id, uni_metadata in candidate_universities:
-            university = next((u for u in self.universities if u.get('id') == uni_id), None)
-            if not university:
-                continue
-
-            # Find the students from this university
-            uni_students = [s for s in self.existing_students if s.get('university_id') == uni_id]
-
-            # If too many students, sample them (for efficiency)
-            sample_size = min(50, len(uni_students))
-            if len(uni_students) > sample_size:
-                import random
-                uni_students = random.sample(uni_students, sample_size)
-
-            # TIER 3: DETAILED STUDENT SIMILARITY
-            # Calculate full similarity scores for these students
-            student_similarities = []
-            for student in uni_students:
-                similarity_data = self.compute_student_similarity(aspiring_profile, student)
-                student_similarities.append(similarity_data)
-
-            # Skip if no similar students
-            if not student_similarities:
-                continue
-
-            # Sort by similarity and take top matches
-            student_similarities.sort(key=lambda x: x['overall_similarity'], reverse=True)
-            top_students = student_similarities[:3]
-
-            # Calculate average scores
-            avg_overall = sum(s['overall_similarity'] for s in top_students) / len(top_students)
-            avg_academic = sum(s['academic_similarity'] for s in top_students) / len(top_students)
-            avg_social = sum(s['social_similarity'] for s in top_students) / len(top_students)
-            avg_financial = sum(s['financial_similarity'] for s in top_students) / len(top_students)
-            avg_career = sum(s['career_similarity'] for s in top_students) / len(top_students)
-            avg_geographic = sum(s['geographic_similarity'] for s in top_students) / len(top_students)
-            avg_facilities = sum(s['facilities_similarity'] for s in top_students) / len(top_students)
-            avg_reputation = sum(s['reputation_similarity'] for s in top_students) / len(top_students)
-            avg_personal = sum(s['personal_fit_similarity'] for s in top_students) / len(top_students)
-
-            # Add to university scores
-            university_scores.append({
-                'university_id': uni_id,
-                'university_name': university.get('name', 'Unknown University'),
-                'overall_score': avg_overall,
-                'academic_score': avg_academic,
-                'social_score': avg_social,
-                'financial_score': avg_financial,
-                'career_score': avg_career,
-                'geographic_score': avg_geographic,
-                'facilities_score': avg_facilities,
-                'reputation_score': avg_reputation,
-                'personal_fit_score': avg_personal,
-                'matching_student_count': len(top_students),
-                'similar_students': top_students
-            })
-
-        # Sort by overall score
-        university_scores.sort(key=lambda x: x['overall_score'], reverse=True)
-
-        # Return top_n universities
-        return university_scores[:top_n]
+        # Try the improved vector-based approach first
+        if self.student_profile_index is not None and len(self.student_vectors) > 0:
+            return self.recommend_universities_vector_based(aspiring_profile, top_n)
+        else:
+            logger.warning("Vector similarity not available, using standard recommendation approach")
+            return self._prefilter_universities_recommend(aspiring_profile, top_n)
 
     def find_similar_students(self, aspiring_profile, top_n=5):
         """Find existing students most similar to the aspiring student"""
+        # Try vector similarity approach first
+        if self.student_profile_index is not None and len(self.student_vectors) > 0:
+            vector_similar_ids = self.find_similar_students_vector(aspiring_profile, top_k=top_n * 3)
+
+            if vector_similar_ids:
+                similar_students = []
+
+                for student_id, vector_sim in vector_similar_ids:
+                    student = next((s for s in self.existing_students if s.get('id') == student_id), None)
+                    if student:
+                        similarity_data = self.compute_student_similarity(aspiring_profile, student)
+                        # Boost similarity score with vector similarity
+                        similarity_data['overall_similarity'] = 0.7 * similarity_data[
+                            'overall_similarity'] + 0.3 * vector_sim
+                        similar_students.append(similarity_data)
+
+                # Sort by overall similarity
+                similar_students.sort(key=lambda x: x['overall_similarity'], reverse=True)
+                return similar_students[:top_n]
+
+        # Fallback to original method
         similarities = []
 
         for existing_student in self.existing_students:
