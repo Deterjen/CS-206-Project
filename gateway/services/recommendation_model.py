@@ -258,14 +258,29 @@ class UniversityRecommender:
         total_weight += 0.3
 
         # Living arrangement compatibility (20%)
-        # Would need data on housing availability
-        # Placeholder logic
-        if aspiring_profile.get('preferred_living_arrangement') == 'On Campus' and existing_profile.get(
-                'housing_quality', 0) > 5:
-            score += 0.2
+        housing_quality = existing_profile.get('housing_quality')
+
+        # Check if aspiring student wants to live on campus
+        if aspiring_profile.get('preferred_living_arrangement') == 'On Campus':
+            # If existing student has housing data and it's good quality
+            if housing_quality is not None and housing_quality > 5:
+                score += 0.2
+            # If existing student doesn't have housing data (doesn't live on campus)
+            elif housing_quality is None:
+                # Partial match - they might know about off-campus options
+                score += 0.05
+        # If aspiring student wants to live off campus
         elif aspiring_profile.get('preferred_living_arrangement') == 'Off Campus':
             # Assume off-campus is always an option
             score += 0.2
+            # Bonus if existing student also lives off campus (has knowledge)
+            if housing_quality is None:
+                score += 0.05  # Small bonus, capped at 0.2 total
+        # If aspiring student wants to commute
+        elif aspiring_profile.get('preferred_living_arrangement') == 'Commute from Home':
+            # Partial match - commuting is generally always an option
+            score += 0.15
+
         total_weight += 0.2
 
         # Normalize
@@ -372,131 +387,193 @@ class UniversityRecommender:
             return score / total_weight
         return 0.0
 
+    def compute_student_similarity(self, aspiring_profile, existing_student):
+        """Compute overall similarity between aspiring student and existing student"""
+        # Find university data for this student
+        university = next((u for u in self.universities if u.get('id') == existing_student.get('university_id')), {})
+
+        # Compute category similarities
+        academic_sim = self.compute_academic_similarity(aspiring_profile, existing_student)
+        social_sim = self.compute_social_similarity(aspiring_profile, existing_student)
+        financial_sim = self.compute_financial_similarity(aspiring_profile, existing_student)
+        career_sim = self.compute_career_similarity(aspiring_profile, existing_student)
+        geographic_sim = self.compute_geographic_similarity(aspiring_profile, existing_student, university)
+        facilities_sim = self.compute_facilities_similarity(aspiring_profile, existing_student)
+        reputation_sim = self.compute_reputation_similarity(aspiring_profile, existing_student)
+        personal_sim = self.compute_personal_fit_similarity(aspiring_profile, existing_student, university)
+
+        # Weighted average
+        overall_sim = (
+                self.category_weights['academic'] * academic_sim +
+                self.category_weights['social'] * social_sim +
+                self.category_weights['financial'] * financial_sim +
+                self.category_weights['career'] * career_sim +
+                self.category_weights['geographic'] * geographic_sim +
+                self.category_weights['facilities'] * facilities_sim +
+                self.category_weights['reputation'] * reputation_sim +
+                self.category_weights['personal_fit'] * personal_sim
+        )
+
+        return {
+            'student_id': existing_student.get('id'),
+            'university_id': existing_student.get('university_id'),
+            'university_name': university.get('name', 'Unknown University'),
+            'overall_similarity': overall_sim,
+            'academic_similarity': academic_sim,
+            'social_similarity': social_sim,
+            'financial_similarity': financial_sim,
+            'career_similarity': career_sim,
+            'geographic_similarity': geographic_sim,
+            'facilities_similarity': facilities_sim,
+            'reputation_similarity': reputation_sim,
+            'personal_fit_similarity': personal_sim
+        }
+
+    def _prefilter_universities(self, aspiring_profile):
+        """
+        TIER 1: Quickly pre-filter universities based on essential criteria
+        before performing detailed similarity calculations.
+        Returns a list of (university_id, metadata) tuples sorted by initial match score.
+        """
+        candidates = []
+
+        # Get unique university IDs
+        university_ids = set(u.get('id') for u in self.universities)
+
+        # Create a university lookup by ID for faster access
+        university_lookup = {u.get('id'): u for u in self.universities}
+
+        # Process each university with lightweight filtering
+        for uni_id in university_ids:
+            university = university_lookup.get(uni_id)
+            if not university:
+                continue
+
+            # Calculate a quick match score based on key factors
+            match_score = 0.0
+            match_factors = 0
+
+            # 1. Geographic match (high weight - very important)
+            if aspiring_profile.get('preferred_region', '').lower() in university.get('location', '').lower():
+                match_score += 3.0
+                match_factors += 1
+
+            # 2. University size preference match
+            if aspiring_profile.get('preferred_student_population') == university.get('size'):
+                match_score += 1.0
+                match_factors += 1
+
+            # 3. Setting match (urban/rural)
+            if aspiring_profile.get('preferred_setting') == university.get('setting'):
+                match_score += 1.0
+                match_factors += 1
+
+            # Normalize score if we have factors to consider
+            initial_score = match_score / max(1, match_factors) if match_factors > 0 else 0
+
+            # Add to candidates with initial score and university data
+            candidates.append((uni_id, {
+                'initial_score': initial_score,
+                'location': university.get('location', ''),
+                'size': university.get('size', ''),
+                'setting': university.get('setting', '')
+            }))
+
+        # If we have candidates, sort by initial score
+        if candidates:
+            candidates.sort(key=lambda x: x[1]['initial_score'], reverse=True)
+
+        return candidates
+
+    def recommend_universities(self, aspiring_profile, top_n=10):
+        """
+        A scalable three-tier approach to ensure diverse university recommendations
+        that performs efficiently even with a large number of universities.
+        """
+        # TIER 1: FAST PRE-FILTERING
+        # First, quickly filter universities based on essential criteria
+        candidate_universities = self._prefilter_universities(aspiring_profile)
+
+        # Limit candidates to a reasonable number (adjust as needed)
+        max_candidates = min(30, len(candidate_universities))
+        candidate_universities = candidate_universities[:max_candidates]
+
+        # TIER 2: DETAILED EVALUATION
+        # Process each candidate university more thoroughly
+        university_scores = []
+
+        for uni_id, uni_metadata in candidate_universities:
+            university = next((u for u in self.universities if u.get('id') == uni_id), None)
+            if not university:
+                continue
+
+            # Find the students from this university
+            uni_students = [s for s in self.existing_students if s.get('university_id') == uni_id]
+
+            # If too many students, sample them (for efficiency)
+            sample_size = min(50, len(uni_students))
+            if len(uni_students) > sample_size:
+                import random
+                uni_students = random.sample(uni_students, sample_size)
+
+            # TIER 3: DETAILED STUDENT SIMILARITY
+            # Calculate full similarity scores for these students
+            student_similarities = []
+            for student in uni_students:
+                similarity_data = self.compute_student_similarity(aspiring_profile, student)
+                student_similarities.append(similarity_data)
+
+            # Skip if no similar students
+            if not student_similarities:
+                continue
+
+            # Sort by similarity and take top matches
+            student_similarities.sort(key=lambda x: x['overall_similarity'], reverse=True)
+            top_students = student_similarities[:3]
+
+            # Calculate average scores
+            avg_overall = sum(s['overall_similarity'] for s in top_students) / len(top_students)
+            avg_academic = sum(s['academic_similarity'] for s in top_students) / len(top_students)
+            avg_social = sum(s['social_similarity'] for s in top_students) / len(top_students)
+            avg_financial = sum(s['financial_similarity'] for s in top_students) / len(top_students)
+            avg_career = sum(s['career_similarity'] for s in top_students) / len(top_students)
+            avg_geographic = sum(s['geographic_similarity'] for s in top_students) / len(top_students)
+            avg_facilities = sum(s['facilities_similarity'] for s in top_students) / len(top_students)
+            avg_reputation = sum(s['reputation_similarity'] for s in top_students) / len(top_students)
+            avg_personal = sum(s['personal_fit_similarity'] for s in top_students) / len(top_students)
+
+            # Add to university scores
+            university_scores.append({
+                'university_id': uni_id,
+                'university_name': university.get('name', 'Unknown University'),
+                'overall_score': avg_overall,
+                'academic_score': avg_academic,
+                'social_score': avg_social,
+                'financial_score': avg_financial,
+                'career_score': avg_career,
+                'geographic_score': avg_geographic,
+                'facilities_score': avg_facilities,
+                'reputation_score': avg_reputation,
+                'personal_fit_score': avg_personal,
+                'matching_student_count': len(top_students),
+                'similar_students': top_students
+            })
+
+        # Sort by overall score
+        university_scores.sort(key=lambda x: x['overall_score'], reverse=True)
+
+        # Return top_n universities
+        return university_scores[:top_n]
+
     def find_similar_students(self, aspiring_profile, top_n=5):
         """Find existing students most similar to the aspiring student"""
         similarities = []
 
         for existing_student in self.existing_students:
-            # Find university data for this student
-            university = next((u for u in self.universities if u.get('id') == existing_student.get('university_id')),
-                              {})
-
-            # Compute category similarities
-            academic_sim = self.compute_academic_similarity(aspiring_profile, existing_student)
-            social_sim = self.compute_social_similarity(aspiring_profile, existing_student)
-            financial_sim = self.compute_financial_similarity(aspiring_profile, existing_student)
-            career_sim = self.compute_career_similarity(aspiring_profile, existing_student)
-            geographic_sim = self.compute_geographic_similarity(aspiring_profile, existing_student, university)
-            facilities_sim = self.compute_facilities_similarity(aspiring_profile, existing_student)
-            reputation_sim = self.compute_reputation_similarity(aspiring_profile, existing_student)
-            personal_sim = self.compute_personal_fit_similarity(aspiring_profile, existing_student, university)
-
-            # Weighted average
-            overall_sim = (
-                    self.category_weights['academic'] * academic_sim +
-                    self.category_weights['social'] * social_sim +
-                    self.category_weights['financial'] * financial_sim +
-                    self.category_weights['career'] * career_sim +
-                    self.category_weights['geographic'] * geographic_sim +
-                    self.category_weights['facilities'] * facilities_sim +
-                    self.category_weights['reputation'] * reputation_sim +
-                    self.category_weights['personal_fit'] * personal_sim
-            )
-
-            similarities.append({
-                'student_id': existing_student.get('id'),
-                'university_id': existing_student.get('university_id'),
-                'university_name': university.get('name', 'Unknown University'),
-                'overall_similarity': overall_sim,
-                'academic_similarity': academic_sim,
-                'social_similarity': social_sim,
-                'financial_similarity': financial_sim,
-                'career_similarity': career_sim,
-                'geographic_similarity': geographic_sim,
-                'facilities_similarity': facilities_sim,
-                'reputation_similarity': reputation_sim,
-                'personal_fit_similarity': personal_sim
-            })
+            similarity_data = self.compute_student_similarity(aspiring_profile, existing_student)
+            similarities.append(similarity_data)
 
         # Sort by overall similarity
         similarities.sort(key=lambda x: x['overall_similarity'], reverse=True)
 
         return similarities[:top_n]
-
-    def recommend_universities(self, aspiring_profile, top_n=10):
-        """Recommend universities based on aspiring student profile"""
-        # Find similar students
-        similar_students = self.find_similar_students(aspiring_profile, top_n=50)
-
-        # Aggregate by university
-        university_scores = {}
-        for student in similar_students:
-            uni_id = student['university_id']
-
-            if uni_id not in university_scores:
-                # Find university name
-                university_name = "Unknown University"
-                for uni in self.universities:
-                    if uni.get('id') == uni_id:
-                        university_name = uni.get('name', 'Unknown University')
-                        break
-
-                university_scores[uni_id] = {
-                    'university_id': uni_id,
-                    'university_name': university_name,
-                    'count': 0,
-                    'overall_score': 0,
-                    'academic_score': 0,
-                    'social_score': 0,
-                    'financial_score': 0,
-                    'career_score': 0,
-                    'geographic_score': 0,
-                    'facilities_score': 0,
-                    'reputation_score': 0,
-                    'personal_fit_score': 0,
-                    'similar_students': []
-                }
-
-            # Add to university scores
-            university_scores[uni_id]['count'] += 1
-            university_scores[uni_id]['overall_score'] += student['overall_similarity']
-            university_scores[uni_id]['academic_score'] += student['academic_similarity']
-            university_scores[uni_id]['social_score'] += student['social_similarity']
-            university_scores[uni_id]['financial_score'] += student['financial_similarity']
-            university_scores[uni_id]['career_score'] += student['career_similarity']
-            university_scores[uni_id]['geographic_score'] += student['geographic_similarity']
-            university_scores[uni_id]['facilities_score'] += student['facilities_similarity']
-            university_scores[uni_id]['reputation_score'] += student['reputation_similarity']
-            university_scores[uni_id]['personal_fit_score'] += student['personal_fit_similarity']
-
-            # Add to similar students list if in top 3 for this university
-            if len(university_scores[uni_id]['similar_students']) < 3:
-                university_scores[uni_id]['similar_students'].append(student)
-
-        # Calculate average scores and normalize by student count
-        results = []
-        for uni_id, scores in university_scores.items():
-            count = max(1, scores['count'])  # Avoid division by zero
-
-            avg_scores = {
-                'university_id': scores['university_id'],
-                'university_name': scores['university_name'],
-                'overall_score': scores['overall_score'] / count,
-                'academic_score': scores['academic_score'] / count,
-                'social_score': scores['social_score'] / count,
-                'financial_score': scores['financial_score'] / count,
-                'career_score': scores['career_score'] / count,
-                'geographic_score': scores['geographic_score'] / count,
-                'facilities_score': scores['facilities_score'] / count,
-                'reputation_score': scores['reputation_score'] / count,
-                'personal_fit_score': scores['personal_fit_score'] / count,
-                'matching_student_count': count,
-                'similar_students': scores['similar_students']
-            }
-
-            results.append(avg_scores)
-
-        # Sort by overall score
-        results.sort(key=lambda x: x['overall_score'], reverse=True)
-
-        return results[:top_n]

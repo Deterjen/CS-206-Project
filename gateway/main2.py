@@ -9,10 +9,10 @@ from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
-load_dotenv('.env.local')
+load_dotenv('../py-backend/.env.local')
 
 # Log the loaded environment variables
 logging.debug(f"SUPABASE_URL: {os.getenv('SUPABASE_URL')}")
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
 
     # Example of saving comprehensive data to file for debugging
-    with open("recommendation_data.json", "w") as f:
-        json.dump(recommendation_details, f, indent=2)
+    with open("../py-backend/recommendation_data.json", "w") as f:
+        json.dump(all_recommendations, f, indent=2)
 
     # Get Justification
     logging.info("Getting justification.")
@@ -109,4 +109,4 @@ if __name__ == '__main__':
     # Pass the extracted data to the generate_justification method
     justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
                                                                   recommendation_details['similar_students'])
-    logging.info(f"Justification: {justification}")
+    logging.info(f"\nJustification: \n{justification}")
