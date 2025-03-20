@@ -12,7 +12,7 @@ from services.supabase_client import SupabaseDB
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
-load_dotenv('.env.local')
+load_dotenv('../py-backend/.env.local')
 
 # Log the loaded environment variables
 logging.debug(f"SUPABASE_URL: {os.getenv('SUPABASE_URL')}")
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
 
     # Example of saving comprehensive data to file for debugging
-    with open("recommendation_data.json", "w") as f:
+    with open("../py-backend/recommendation_data.json", "w") as f:
         json.dump(all_recommendations, f, indent=2)
 
     # Get Justification
