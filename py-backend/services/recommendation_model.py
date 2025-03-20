@@ -439,79 +439,59 @@ class UniversityRecommender:
         return similarities[:top_n]
 
     def recommend_universities(self, aspiring_profile, top_n=10):
-        """Recommend universities based on aspiring student profile"""
-        # Find similar students
-        similar_students = self.find_similar_students(aspiring_profile, top_n=50)
+        """
+        Recommend universities based on aspiring student profile with diversity in results.
+        Ensures top_n different universities are recommended, rather than just using top similar students.
+        """
+        # Find a larger pool of similar students to ensure we have diverse university representation
+        pool_size = min(500, len(self.existing_students))
+        similar_students = self.find_similar_students(aspiring_profile, top_n=pool_size)
 
-        # Aggregate by university
-        university_scores = {}
+        # Group students by university
+        university_students = {}
         for student in similar_students:
             uni_id = student['university_id']
+            if uni_id not in university_students:
+                university_students[uni_id] = []
+            university_students[uni_id].append(student)
 
-            if uni_id not in university_scores:
-                # Find university name
-                university_name = "Unknown University"
-                for uni in self.universities:
-                    if uni.get('id') == uni_id:
-                        university_name = uni.get('name', 'Unknown University')
-                        break
+        # Calculate university scores using the top students from each university
+        university_scores = {}
+        for uni_id, students in university_students.items():
+            # Sort students by similarity and take top students for this university (max 5)
+            top_uni_students = sorted(students, key=lambda x: x['overall_similarity'], reverse=True)[:5]
 
-                university_scores[uni_id] = {
-                    'university_id': uni_id,
-                    'university_name': university_name,
-                    'count': 0,
-                    'overall_score': 0,
-                    'academic_score': 0,
-                    'social_score': 0,
-                    'financial_score': 0,
-                    'career_score': 0,
-                    'geographic_score': 0,
-                    'facilities_score': 0,
-                    'reputation_score': 0,
-                    'personal_fit_score': 0,
-                    'similar_students': []
-                }
+            if not top_uni_students:  # Skip if no students for this university
+                continue
 
-            # Add to university scores
-            university_scores[uni_id]['count'] += 1
-            university_scores[uni_id]['overall_score'] += student['overall_similarity']
-            university_scores[uni_id]['academic_score'] += student['academic_similarity']
-            university_scores[uni_id]['social_score'] += student['social_similarity']
-            university_scores[uni_id]['financial_score'] += student['financial_similarity']
-            university_scores[uni_id]['career_score'] += student['career_similarity']
-            university_scores[uni_id]['geographic_score'] += student['geographic_similarity']
-            university_scores[uni_id]['facilities_score'] += student['facilities_similarity']
-            university_scores[uni_id]['reputation_score'] += student['reputation_similarity']
-            university_scores[uni_id]['personal_fit_score'] += student['personal_fit_similarity']
+            # Find university name
+            university_name = "Unknown University"
+            for uni in self.universities:
+                if uni.get('id') == uni_id:
+                    university_name = uni.get('name', 'Unknown University')
+                    break
 
-            # Add to similar students list if in top 3 for this university
-            if len(university_scores[uni_id]['similar_students']) < 3:
-                university_scores[uni_id]['similar_students'].append(student)
-
-        # Calculate average scores and normalize by student count
-        results = []
-        for uni_id, scores in university_scores.items():
-            count = max(1, scores['count'])  # Avoid division by zero
-
-            avg_scores = {
-                'university_id': scores['university_id'],
-                'university_name': scores['university_name'],
-                'overall_score': scores['overall_score'] / count,
-                'academic_score': scores['academic_score'] / count,
-                'social_score': scores['social_score'] / count,
-                'financial_score': scores['financial_score'] / count,
-                'career_score': scores['career_score'] / count,
-                'geographic_score': scores['geographic_score'] / count,
-                'facilities_score': scores['facilities_score'] / count,
-                'reputation_score': scores['reputation_score'] / count,
-                'personal_fit_score': scores['personal_fit_score'] / count,
-                'matching_student_count': count,
-                'similar_students': scores['similar_students']
+            # Calculate average scores
+            university_scores[uni_id] = {
+                'university_id': uni_id,
+                'university_name': university_name,
+                'overall_score': sum(s['overall_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'academic_score': sum(s['academic_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'social_score': sum(s['social_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'financial_score': sum(s['financial_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'career_score': sum(s['career_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'geographic_score': sum(s['geographic_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'facilities_score': sum(s['facilities_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'reputation_score': sum(s['reputation_similarity'] for s in top_uni_students) / len(top_uni_students),
+                'personal_fit_score': sum(s['personal_fit_similarity'] for s in top_uni_students) / len(
+                    top_uni_students),
+                'matching_student_count': len(top_uni_students),
+                'similar_students': top_uni_students
             }
 
-            results.append(avg_scores)
-
-        # Sort by overall score
+        # Convert to list and sort by overall score
+        results = list(university_scores.values())
         results.sort(key=lambda x: x['overall_score'], reverse=True)
 
-        return results[:top_n]
+        # Return top N universities based on scores (or fewer if not enough universities)
+        return results[:min(top_n, len(results))]
