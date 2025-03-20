@@ -258,14 +258,29 @@ class UniversityRecommender:
         total_weight += 0.3
 
         # Living arrangement compatibility (20%)
-        # Would need data on housing availability
-        # Placeholder logic
-        if aspiring_profile.get('preferred_living_arrangement') == 'On Campus' and existing_profile.get(
-                'housing_quality', 0) > 5:
-            score += 0.2
+        housing_quality = existing_profile.get('housing_quality')
+
+        # Check if aspiring student wants to live on campus
+        if aspiring_profile.get('preferred_living_arrangement') == 'On Campus':
+            # If existing student has housing data and it's good quality
+            if housing_quality is not None and housing_quality > 5:
+                score += 0.2
+            # If existing student doesn't have housing data (doesn't live on campus)
+            elif housing_quality is None:
+                # Partial match - they might know about off-campus options
+                score += 0.05
+        # If aspiring student wants to live off campus
         elif aspiring_profile.get('preferred_living_arrangement') == 'Off Campus':
             # Assume off-campus is always an option
             score += 0.2
+            # Bonus if existing student also lives off campus (has knowledge)
+            if housing_quality is None:
+                score += 0.05  # Small bonus, capped at 0.2 total
+        # If aspiring student wants to commute
+        elif aspiring_profile.get('preferred_living_arrangement') == 'Commute from Home':
+            # Partial match - commuting is generally always an option
+            score += 0.15
+
         total_weight += 0.2
 
         # Normalize
@@ -426,7 +441,7 @@ class UniversityRecommender:
     def recommend_universities(self, aspiring_profile, top_n=10):
         """Recommend universities based on aspiring student profile"""
         # Find similar students
-        similar_students = self.find_similar_students(aspiring_profile, top_n=50)
+        similar_students = self.find_similar_students(aspiring_profile)
 
         # Aggregate by university
         university_scores = {}
