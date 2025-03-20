@@ -246,7 +246,7 @@ class RecommenderEvaluator:
 # Example usage:
 def main():
     # Initialize evaluator
-    evaluator = RecommenderEvaluator('../data/synthetic_data/synthetic_profiles.csv')
+    evaluator = RecommenderEvaluator('../../py_backend/data/synthetic_data/synthetic_profiles.csv')
 
     # Prepare data and train recommender
     train_data, test_data = evaluator.prepare_train_test_split()
