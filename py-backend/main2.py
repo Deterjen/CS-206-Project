@@ -9,7 +9,7 @@ from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv('.env.local')

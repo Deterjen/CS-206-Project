@@ -73,20 +73,64 @@ class UniversityRecommendationService:
         self._load_existing_students_optimized()
 
     def _load_existing_students_optimized(self):
-        """Load all existing students with optimized batch queries"""
-        # Get all existing student IDs first
-        response = self.db.supabase.table("existing_students").select("id").execute()
-        student_ids = [student["id"] for student in response.data]
+        """
+        Load all existing students with optimized batch queries.
+        This version uses a university-balanced approach to ensure diverse representation.
+        """
+        # First, get a count of students per university
+        university_counts_response = self.db.supabase.rpc(
+            'get_university_student_counts'  # We'll create this stored procedure
+        ).execute()
 
-        # Use batch processing to reduce the number of queries
+        university_counts = university_counts_response.data
+
+        # If RPC is not available, we can use this fallback SQL query method
+        if not university_counts:
+            university_counts_response = self.db.supabase.table("existing_students") \
+                .select("university_id, count(*)") \
+                .group_by("university_id") \
+                .execute()
+            university_counts = university_counts_response.data
+
+        # Calculate appropriate sample size for each university for better balance
+        total_to_load = 2000  # Limit total number of students loaded for memory efficiency
+        universities = len(university_counts)
+        base_per_university = total_to_load // universities
+
+        # Get balanced sample of student IDs from each university
+        all_student_ids = []
+
+        for uni_count in university_counts:
+            uni_id = uni_count.get('university_id')
+            count = uni_count.get('count')
+
+            # Sample size shouldn't exceed available students
+            sample_size = min(count, base_per_university)
+
+            # Get sample of student IDs from this university
+            sample_response = self.db.supabase.table("existing_students") \
+                .select("id") \
+                .eq("university_id", uni_id) \
+                .limit(sample_size) \
+                .execute()
+
+            # Add student IDs to our list
+            student_ids_from_uni = [s.get('id') for s in sample_response.data]
+            all_student_ids.extend(student_ids_from_uni)
+
+        # Shuffle the IDs to avoid any potential ordering bias
+        import random
+        random.shuffle(all_student_ids)
+
+        # Now use the batch loading method with these IDs
         batch_size = 50  # Adjust based on your database performance
-        total_students = len(student_ids)
+        total_students = len(all_student_ids)
 
-        logger.info(f"Loading {total_students} student profiles in batches of {batch_size}...")
+        logger.info(f"Loading {total_students} balanced student profiles in batches of {batch_size}...")
 
         # Load sections in batches to minimize database roundtrips
         for i in range(0, total_students, batch_size):
-            batch_ids = student_ids[i:i + batch_size]
+            batch_ids = all_student_ids[i:i + batch_size]
             logger.info(f"Loading student batch {i + 1}-{min(i + batch_size, total_students)}...")
 
             # Load core student data
@@ -342,10 +386,10 @@ class UniversityRecommendationService:
 
         return profile_data
 
-    def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
+    def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10):
         """
         Generate university recommendations for an aspiring student.
-        Similar students are saved but not included in the response for modularity.
+        This optimized version ensures diverse university recommendations.
 
         Args:
             aspiring_student_id: ID of the aspiring student
@@ -360,9 +404,13 @@ class UniversityRecommendationService:
         # Generate recommendations using the recommender
         raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
 
-        # Process and save recommendations
-        saved_recommendations = []
+        # Log stats for monitoring
+        unique_universities = len(raw_recommendations)
+        logger.info(
+            f"Generated {unique_universities} unique university recommendations for student {aspiring_student_id}")
 
+        # Process and save recommendations in a batch operation
+        recommendation_records = []
         for rec in raw_recommendations:
             # Prepare recommendation data without similar students
             rec_data = {
@@ -378,33 +426,56 @@ class UniversityRecommendationService:
                 "reputation_score": rec["reputation_score"],
                 "personal_fit_score": rec["personal_fit_score"]
             }
+            recommendation_records.append(rec_data)
 
-            # Insert recommendation record
-            rec_response = self.db.supabase.table("recommendations").insert(rec_data).execute()
-            recommendation_id = rec_response.data[0]["id"]
-            saved_rec = rec_response.data[0]
+        # Insert all recommendations in a single batch
+        if recommendation_records:
+            rec_response = self.db.supabase.table("recommendations").insert(recommendation_records).execute()
+            saved_recommendations = rec_response.data
 
-            # Save similar students separately with detailed similarity scores
-            for student in rec.get("similar_students", []):
-                student_data = {
-                    "recommendation_id": recommendation_id,
-                    "existing_student_id": student["student_id"],
-                    "similarity_score": student["overall_similarity"],
-                    "academic_similarity": student.get("academic_similarity", 0),
-                    "social_similarity": student.get("social_similarity", 0),
-                    "financial_similarity": student.get("financial_similarity", 0),
-                    "career_similarity": student.get("career_similarity", 0),
-                    "geographic_similarity": student.get("geographic_similarity", 0),
-                    "facilities_similarity": student.get("facilities_similarity", 0),
-                    "reputation_similarity": student.get("reputation_similarity", 0),
-                    "personal_fit_similarity": student.get("personal_fit_similarity", 0)
+            # Prepare similar students as one large batch
+            similar_student_records = []
+
+            # For each recommendation, save its similar students
+            for i, rec in enumerate(raw_recommendations):
+                recommendation_id = saved_recommendations[i]["id"]
+
+                for student in rec.get("similar_students", []):
+                    student_data = {
+                        "recommendation_id": recommendation_id,
+                        "existing_student_id": student["student_id"],
+                        "similarity_score": student["overall_similarity"],
+                        "academic_similarity": student.get("academic_similarity", 0),
+                        "social_similarity": student.get("social_similarity", 0),
+                        "financial_similarity": student.get("financial_similarity", 0),
+                        "career_similarity": student.get("career_similarity", 0),
+                        "geographic_similarity": student.get("geographic_similarity", 0),
+                        "facilities_similarity": student.get("facilities_similarity", 0),
+                        "reputation_similarity": student.get("reputation_similarity", 0),
+                        "personal_fit_similarity": student.get("personal_fit_similarity", 0)
+                    }
+                    similar_student_records.append(student_data)
+
+            # Save all similar students in one batch operation
+            if similar_student_records:
+                self.db.supabase.table("similar_students").insert(similar_student_records).execute()
+
+            # Log performance data
+            self.db.supabase.table("recommendation_performance_logs").insert({
+                "aspiring_student_id": aspiring_student_id,
+                "universities_recommended": len(saved_recommendations),
+                "top_similarity_score": saved_recommendations[0]["overall_score"] if saved_recommendations else 0,
+                "average_similarity_score": sum(r["overall_score"] for r in saved_recommendations) / len(
+                    saved_recommendations) if saved_recommendations else 0,
+                "metadata": {
+                    "algorithm_version": "2.0",
+                    "categories_used": list(self.recommender.category_weights.keys())
                 }
+            }).execute()
 
-                self.db.supabase.table("similar_students").insert(student_data).execute()
+            return saved_recommendations
 
-            saved_recommendations.append(saved_rec)
-
-        return saved_recommendations
+        return []
 
     def get_similar_students(self, recommendation_id: int) -> List[Dict[str, Any]]:
         """
