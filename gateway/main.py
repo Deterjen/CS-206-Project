@@ -2,7 +2,6 @@ import os
 from typing import Dict
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.encoders import jsonable_encoder
 from auth import authenticate, create_token, get_current_active_user
 # from database import update_user, delete_user
 from models import Token, User, RecommendationRequest
@@ -126,7 +125,7 @@ from fastapi import Depends
 
 # University recommendation request
 @app.post("/save_questionaire/{username}")
-async def recommend(
+async def save_questionnaire(
     username: str,
     questionnaire_result: RecommendationRequest,
     current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
@@ -134,7 +133,7 @@ async def recommend(
     try:
         # Ensure the username in the request matches the authenticated user's username
         if username != current_user["username"]:
-            raise HTTPException(status_code=403, detail="You can only request recommendations for your own account")
+            raise HTTPException(status_code=403, detail="You can only save questionnaire for your own account")
 
         # Proceed with processing the questionnaire if user is authenticated and authorized
         response = await university_recommender_service.process_questionnaire(username, dict(questionnaire_result))

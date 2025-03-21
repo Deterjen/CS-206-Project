@@ -23,7 +23,7 @@ class RecommendationRequest(BaseModel):
     culture_importance: int
     interested_activities: List[str]
     weekly_extracurricular_hours: int
-    passionate_actvities: List[str]
+    passionate_activities: List[str]
     # Career section
     internship_importance: int
     leadership_interest: bool
