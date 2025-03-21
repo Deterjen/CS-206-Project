@@ -46,17 +46,8 @@ For each category, the system uses appropriate similarity metrics:
 
 - Python 3.8+
 - C++ Build Tools (for HNSW installation)
-
-### Dependencies
-
-```
-supabase~=1.0.3
-pydantic~=1.10.8
-sentence-transformers~=2.2.2
-hnswlib~=0.7.0
-python-dotenv~=1.0.0
-numpy~=1.24.3
-```
+- Node.js and npm (for Supabase CLI)
+- Docker (for running Supabase locally)
 
 ## Installation
 
@@ -107,13 +98,67 @@ numpy~=1.24.3
    Create a `.env.local` file in the project root with your Supabase credentials:
 
    ```
-   # For local development with Supabase CLI
-   SUPABASE_URL=http://localhost:54321
-   SUPABASE_KEY=your_local_anon_key_from_supabase_start_output
-   
-   # Or for Supabase cloud
-   # SUPABASE_URL=your_supabase_url
-   # SUPABASE_KEY=your_supabase_key
+    # Supabase credentials
+    SUPABASE_URL=http://localhost:54321
+    SUPABASE_KEY=your_local_anon_key_from_supabase_start_output
+    
+    # Authentication settings
+    SECRET_KEY=your_secret_key_for_jwt
+    ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=30
+    
+    # JamAIbase integration (for recommendation justification)
+    JAMAIBASE_KEY=your_jamaibase_key
+    JAMAIBASE_PAT=your_jamaibase_pat
+    JAMAIBASE_PROJECT_ID=your_jamaibase_project_id
+    
+    # For Supabase cloud (if not using local)
+    # SUPABASE_URL=your_supabase_url
+    # SUPABASE_KEY=your_supabase_key
+   ```
+
+## Running the Gateway
+
+To run the FastAPI gateway:
+
+```bash
+# Navigate to the gateway directory
+cd gateway
+
+# Run the FastAPI application with hot-reload
+uvicorn main:app --reload
+```
+
+The API will be available at http://localhost:8000. You can access the interactive API documentation at http://localhost:8000/docs.
+
+## Resetting the Supabase Database
+
+If you need to reset your local Supabase database and populate it with fresh data:
+
+1. **Reset the database**:
+   ```bash
+   npx supabase db reset
+   ```
+
+2. **Run the schema creation script**:
+   ```bash
+   # Option 1: Using the Supabase Studio UI
+   # Access http://localhost:54323
+   # Go to the SQL Editor
+   # Load and execute postgres.sql
+
+   # Option 2: Using the command line
+   psql -h localhost -p 5432 -U postgres -d postgres -f postgres.sql
+   ```
+
+3. **Generate and insert synthetic data**:
+   ```bash
+   # Generate synthetic data
+   cd gateway
+   python -m data.synthetic_data_generator --total 500
+
+   # Insert the generated data
+   psql -h localhost -p 5432 -U postgres -d postgres -f data/out/insert_statements.sql
    ```
 
 ## Database Schema
@@ -126,102 +171,6 @@ The system uses a relational database schema with the following main tables:
 - **AspiringStudents**: Prospective student information with preference subsections
 - **Recommendations**: Generated university recommendations with similarity scores
 - **SimilarStudents**: Links between aspiring students and similar existing students
-
-### Setting Up Database Schema
-
-After starting your local Supabase instance, you need to set up the database schema:
-
-1. Access the Supabase Studio at http://localhost:54323
-2. Go to the SQL Editor
-3. Execute the schema creation SQL file:
-   - Load the `postgres.sql` file from the project root
-   - Execute the SQL to create all necessary tables and relationships
-
-### Loading Test Data
-
-To populate the database with sample data for testing:
-
-1. In the Supabase SQL Editor, load the `tempdata.sql` file
-2. Execute the SQL to insert test universities, programs, existing students, and their questionnaire responses
-3. This test data enables you to immediately test the recommendation system functionality
-
-You can also execute these files from the command line:
-
-```bash
-# Execute schema creation
-psql -h localhost -p 5432 -U postgres -d postgres -f postgres.sql
-
-# Load test data
-psql -h localhost -p 5432 -U postgres -d postgres -f tempdata.sql
-```
-
-## Usage
-
-### Basic Usage
-
-```python
-from services.supabase_client import SupabaseDB
-from services.recommendation_service import UniversityRecommendationService
-
-# Initialize the service
-supabase_db = SupabaseDB.from_env()
-recommendation_service = UniversityRecommendationService(supabase_db)
-
-# Initialize the recommender with data
-recommendation_service.initialize_recommender()
-
-# Process an aspiring student questionnaire
-questionnaire_data = {
-    "preferred_fields": ["Business", "Computing/IT"],
-    "learning_style": "Hands-on/Practical",
-    "career_goals": "Technology entrepreneurship",
-    # ... other questionnaire responses
-}
-
-# Process the questionnaire and create student profile
-student_record = recommendation_service.process_questionnaire(questionnaire_data)
-student_id = student_record["core"]["id"]
-
-# Generate recommendations (without similar students)
-recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
-
-# Get the first recommendation's ID
-first_recommendation_id = recommendations[0]["id"]
-
-# Get similar students for the first recommendation
-similar_students = recommendation_service.get_similar_students(first_recommendation_id)
-
-# Get comprehensive details for the first recommendation
-recommendation_details = recommendation_service.get_recommendation_with_details(first_recommendation_id)
-
-# Alternatively, get all recommendations with details at once
-all_recommendations = recommendation_service.get_recommendations_with_details(student_id)
-```
-
-### Example Script
-
-See `main2.py` for a complete example of how to use the recommendation service.
-
-## Customization
-
-### Adjusting Category Weights
-
-You can customize the importance of different categories by providing custom weights:
-
-```python
-custom_weights = {
-    'academic': 0.25,
-    'social': 0.15,
-    'financial': 0.2,
-    'career': 0.15,
-    'geographic': 0.1,
-    'facilities': 0.05,
-    'reputation': 0.05,
-    'personal_fit': 0.05
-}
-
-recommendation_service.initialize_recommender(category_weights=custom_weights)
-```
 
 ## Questionnaire Structure
 
@@ -251,28 +200,36 @@ The questionnaire for prospective students is divided into 8 sections:
 7. Reputation and Brand Value
 8. Personal Fit
 
-## How the Recommendation Works
+## Recommendation Output
 
-1. An aspiring student completes their questionnaire
-2. The system processes and structures their responses
-3. It compares the aspiring student's profile with existing student profiles
-4. Similarity scores are calculated across multiple dimensions
-5. Universities are ranked based on the overall similarity and category-specific scores
-6. The system identifies the most similar existing students for each recommended university
-7. Detailed recommendations are provided with similarity breakdowns
+The system provides comprehensive recommendation results including:
 
-## Project Structure
+1. **Ranked Universities**: Based on overall similarity and fit
+2. **Category-Specific Scores**: Detailed breakdown of similarity across 8 dimensions:
+   - Academic Interest Similarity
+   - Social and Cultural Compatibility
+   - Financial Feasibility
+   - Career Prospects
+   - Geographic Preferences
+   - Campus Facilities
+   - Reputation and Brand Value
+   - Personal Fit
+3. **Similar Existing Students**: Profiles of current students with similar preferences
+4. **Justification**: Natural language explanation of why each university is recommended
 
-```
-py-backend/
-├── main2.py                         # Example script
-├── schemas/                         # Data models
-│   └── schema.py                    # Pydantic schema definitions
-├── services/
-│   ├── recommendation_model.py      # Core recommendation algorithm
-│   ├── recommendation_service.py    # Service layer connecting DB and model
-│   └── supabase_client.py           # Database client
-```
+## API Endpoints
+
+The system provides the following key endpoints:
+
+- **POST /register/**: Register a new user account
+- **POST /token**: Login and get an access token
+- **POST /save_questionaire/{username}**: Save a completed aspiring student questionnaire
+- **GET /recommendation/{username}**: Generate university recommendations
+- **GET /recommendation/all_details/{username}**: Get comprehensive details for all recommendations
+- **GET /recommendation/detail/{username}/{recommendation_id}**: Get details for a specific recommendation
+- **GET /recommendation/similar_student/{username}/{recommendation_id}**: Get similar students for a recommendation
+
+For a complete list of endpoints, refer to the Swagger documentation at http://localhost:8000/docs when running the API.
 
 ## Advanced Features
 
@@ -282,9 +239,31 @@ For free-text responses, the system uses:
 - **Sentence Transformers**: Converts text to numerical embeddings
 - **HNSW (Hierarchical Navigable Small World)**: Enables efficient similarity search in high-dimensional spaces
 
-### Feedback Loop
+### Vector-Based Recommendations
 
-The system includes a feedback mechanism to collect user ratings on recommendations, which can be used to improve the model over time.
+The system utilizes vector similarity search for efficient and accurate matching:
+1. Student profiles are converted to high-dimensional vectors
+2. Fast HNSW indexing enables efficient similarity computation
+3. Weighted category scores ensure personalized recommendations
+
+### Customizable Weights
+
+You can customize the importance of different categories by providing custom weights:
+
+```python
+custom_weights = {
+    'academic': 0.25,
+    'social': 0.15,
+    'financial': 0.2,
+    'career': 0.15,
+    'geographic': 0.1,
+    'facilities': 0.05,
+    'reputation': 0.05,
+    'personal_fit': 0.05
+}
+
+recommendation_service.initialize_recommender(category_weights=custom_weights)
+```
 
 ## Performance Considerations
 
