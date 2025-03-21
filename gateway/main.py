@@ -145,13 +145,13 @@ async def save_questionnaire(
             raise HTTPException(status_code=403, detail="You can only save questionnaire for your own account")
 
         # Proceed with processing the questionnaire if user is authenticated and authorized
-        response = await university_recommender_service.process_questionnaire(username, dict(questionnaire_result))
+        response = await recommendation_service.process_questionnaire(username, dict(questionnaire_result))
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 # Generate recommendation route
-@app.get("/recommend/{username}")
+@app.get("/recommendation/{username}")
 async def generate_recommendation(
     username: str,
     number_of_results: int,
@@ -168,8 +168,8 @@ async def generate_recommendation(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     
-# Getting recommendation detail route
-@app.get("/recommend/details/{username}")
+# Getting all recommendation detail route
+@app.get("/recommendation/all_details/{username}")
 async def get_recommendation_details(
     username: str,
     current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
@@ -179,8 +179,44 @@ async def get_recommendation_details(
         if username != current_user["username"]:
             raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
 
+        # Proceed with requesting for all recommendations if user is authenticated and authorized
+        response = await recommendation_service.get_all_recommendations_details(username)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+# Getting a single recommendation detail route
+@app.get("/recommendation/detail/{username}/{recommendation_id}")
+async def get_recommendation_details(
+    username: str,
+    recommendation_id: int,
+    current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
+
         # Proceed with requesting for a recommendation if user is authenticated and authorized
-        response = await recommendation_service.get_recommendations_details(username)
+        response = recommendation_service.get_recommendation_details(recommendation_id)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+# Getting similar student route
+@app.get("/recommendation/similar_student/{username}/{recommendation_id}")
+async def get_recommendation_details(
+    username: str,
+    recommendation_id: int,
+    current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
+
+        # Proceed with requesting for bunch of similar students to user, if user is authenticated and authorized
+        response = recommendation_service.get_similar_students(recommendation_id)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

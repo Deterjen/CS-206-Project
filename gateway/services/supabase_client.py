@@ -801,7 +801,7 @@ class SupabaseDB:
 
         return results
 
-    def get_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
+    def get_all_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
         Get all recommendations for an aspiring student with university and similar student details
         in a minimal number of queries.
