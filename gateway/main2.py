@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -20,7 +21,8 @@ logging.debug(f"SUPABASE_KEY: {os.getenv('SUPABASE_KEY')}")
 logging.debug(f"JAMAIBASE_PAT:{os.getenv('JAMAIBASE_PAT')}")
 logging.debug(f"JAMAIBASE_PROJECT_ID:{os.getenv('JAMAIBASE_PROJECT_ID')}")
 
-if __name__ == '__main__':
+
+async def main():
     # Initialize the service
     logging.info("Initializing SupabaseDB from environment.")
     supabase_db = SupabaseDB.from_env()
@@ -69,12 +71,19 @@ if __name__ == '__main__':
         "lifestyle_preferences": "Active campus life with balance between academics and social"
     }
 
+    username = "test_user"
+
+    # Sign up the user via Supabase authentication (this creates an entry in 'auth.users' table)
+    # response = await supabase_db.signup_user({"username": username,
+    #                                           "email": "test@gmail.com",
+    #                                           "password": get_hashed_password("abcd")
+    #                                           })
+
     # Process the questionnaire and create student profile
-    student_record = recommendation_service.process_questionnaire(questionnaire_data)
-    student_id = student_record["core"]["id"]
+    student_record = await recommendation_service.process_questionnaire(username, questionnaire_data)
 
     # Generate recommendations (without similar students)
-    recommendations = recommendation_service.generate_recommendations(student_id, top_n=5)
+    recommendations = await recommendation_service.generate_recommendations(username, top_n=5)
     print(f"\nGenerated {len(recommendations)} recommendations")
 
     # Get the first recommendation's ID
@@ -88,7 +97,7 @@ if __name__ == '__main__':
     recommendation_details = recommendation_service.get_recommendation_details(first_recommendation_id)
 
     # Alternatively, get all recommendations with details at once
-    all_recommendations = recommendation_service.get_recommendations_details(student_id)
+    all_recommendations = await recommendation_service.get_recommendations_details(username)
     print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
 
     # Example of saving comprehensive data to file for debugging
@@ -110,3 +119,7 @@ if __name__ == '__main__':
     # justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
     #                                                               recommendation_details['similar_students'])
     # logging.info(f"\nJustification: \n{justification}")
+
+
+if __name__ == '__main__':
+    asyncio.run(main())

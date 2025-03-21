@@ -182,12 +182,12 @@ class UniversityRecommendationService:
 
         return university
 
-
-    def process_questionnaire(self, username: str, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_questionnaire(self, username: str, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a complete aspiring student questionnaire.
 
         Args:
+            username: Username of the aspiring student
             aspiring_student_data: Dictionary with all questionnaire responses
 
         Returns:
@@ -198,7 +198,7 @@ class UniversityRecommendationService:
             formatted_data = self._format_aspiring_student_data(aspiring_student_data)
 
             # Create the aspiring student record
-            result = self.db.create_aspiring_student_complete(username, formatted_data)
+            result = await self.db.create_aspiring_student_complete(username, formatted_data)
             return result
         except Exception as e:
             # Log the error
@@ -298,44 +298,63 @@ class UniversityRecommendationService:
 
         return formatted_data
 
-    def get_aspiring_student_profile(self, student_id: int) -> Dict[str, Any]:
+    async def get_aspiring_student_profile(self, username: str) -> Dict[str, Any]:
         """
         Get a complete aspiring student profile for the recommender.
         Optimized to use a single query and return a flat structure.
 
         Args:
-            student_id: ID of the aspiring student
+            username: Username of the aspiring student
 
         Returns:
             Flat dictionary with all student attributes
         """
+        # Get the aspiring student ID from the username
+        aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
+
         # Get the complete profile data with a single optimized query
-        profile_data = self.db.get_aspiring_student_complete(student_id)
+        profile_data = self.db.get_aspiring_student_complete(aspiring_student_id)
 
         if not profile_data:
-            raise ValueError(f"Aspiring student with ID {student_id} not found")
+            raise ValueError(f"Aspiring student with ID {aspiring_student_id} not found")
 
         # Convert to flat structure for the recommender
         flat_profile = self._flatten_aspiring_student(profile_data)
 
         return flat_profile
 
-    def generate_recommendations(self, aspiring_student_id: int, top_n: int = 10):
+    async def _get_aspiring_student_id_from_username(self, username: str) -> int:
+        """
+        Get the aspiring student ID from a username.
+
+        Args:
+            username: Username of the aspiring student
+
+        Returns:
+            ID of the aspiring student
+        """
+        aspiring_student = await self.db.get_aspiring_student(username)
+        if not aspiring_student or not aspiring_student[0]:
+            raise ValueError(f"Aspiring student with username {username} not found")
+
+        return aspiring_student[0]["id"]
+
+    async def generate_recommendations(self, username: str, top_n: int = 10):
         """
         Generate university recommendations for an aspiring student.
         Uses vector similarity search for more accurate recommendations
         with minimal database queries.
 
         Args:
-            aspiring_student_id: ID of the aspiring student
+            username: Username of the aspiring student
             top_n: Number of recommendations to generate
 
         Returns:
             List of university recommendations with scores
         """
         # Get the aspiring student's profile (1 query)
-        logger.info(f"Fetching aspiring student profile for ID {aspiring_student_id}")
-        aspiring_profile = self.get_aspiring_student_profile(aspiring_student_id)
+        logger.info(f"Fetching aspiring student profile for username {username}")
+        aspiring_profile = await self.get_aspiring_student_profile(username)
 
         # Generate recommendations using the in-memory recommender with improved vector similarity (0 queries)
         logger.info("Generating recommendations using vector similarity search")
@@ -344,6 +363,9 @@ class UniversityRecommendationService:
         # Log stats
         unique_universities = len(raw_recommendations)
         logger.info(f"Generated {unique_universities} unique university recommendations")
+
+        # Get the aspiring student ID from the username for saving recommendations
+        aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
 
         # Save all recommendations and similar students in a batch (1-2 queries)
         logger.info("Saving recommendations and similar students in batch")
@@ -380,17 +402,20 @@ class UniversityRecommendationService:
         """
         return self.db.get_recommendation_with_details(recommendation_id)
 
-    def get_recommendations_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
+    async def get_recommendations_details(self, username: str) -> List[Dict[str, Any]]:
         """
         Get all recommendations for an aspiring student with details.
         Uses a minimal number of optimized queries.
 
         Args:
-            aspiring_student_id: ID of the aspiring student
+            username: Username of the aspiring student
 
         Returns:
             List of comprehensive recommendation data
         """
+        # Get the aspiring student ID from the username
+        aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
+
         return self.db.get_recommendations_with_details(aspiring_student_id)
 
     def collect_feedback(self, recommendation_id: int, rating: int, text: str) -> Dict[str, Any]:

@@ -139,7 +139,7 @@ CREATE TABLE users (
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     -- is_disabled BOOLEAN NOT NUll DEFAULT FALSE
 );
 
@@ -347,30 +347,54 @@ $$ LANGUAGE plpgsql;
 
 -- Create a function to get a balanced sample of students for recommendations
 CREATE OR REPLACE FUNCTION get_balanced_student_sample(
-    max_students_per_university INTEGER DEFAULT 400,
-    min_students_per_university INTEGER DEFAULT 50
+    max_students_per_university INTEGER DEFAULT 50,
+    min_students_per_university INTEGER DEFAULT 20
 )
 RETURNS TABLE (student_id INTEGER) AS $$
 DECLARE
     uni_record RECORD;
-    sample_size INTEGER;
+    total_per_uni INTEGER;
 BEGIN
     -- For each university
-    FOR uni_record IN SELECT university_id, COUNT(*) as student_count
-                      FROM existing_students
-                      GROUP BY university_id
+    FOR uni_record IN
+        SELECT university_id, COUNT(*) as student_count
+        FROM existing_students
+        GROUP BY university_id
     LOOP
-        -- Calculate appropriate sample size (between min and max)
-        sample_size := LEAST(max_students_per_university,
-                            GREATEST(min_students_per_university, uni_record.student_count / 2));
+        -- Calculate sample size between min and max
+        total_per_uni := LEAST(max_students_per_university,
+                             GREATEST(min_students_per_university, uni_record.student_count / 4));
 
-        -- Return student IDs from this university (using random sampling)
+        -- Return a diverse sample of students from this university
         RETURN QUERY
-        SELECT es.id
-        FROM existing_students es
-        WHERE es.university_id = uni_record.university_id
-        ORDER BY RANDOM()
-        LIMIT sample_size;
+        (
+            -- Some from each program
+            SELECT es.id
+            FROM existing_students es
+            WHERE es.university_id = uni_record.university_id
+            GROUP BY es.program_id, es.id
+            LIMIT GREATEST(total_per_uni / 3, 5)
+        )
+        UNION
+        (
+            -- Some with high satisfaction
+            SELECT es.id
+            FROM existing_students es
+            JOIN existing_students_university_info esui ON es.id = esui.student_id
+            WHERE es.university_id = uni_record.university_id
+            ORDER BY esui.overall_satisfaction DESC
+            LIMIT GREATEST(total_per_uni / 3, 5)
+        )
+        UNION
+        (
+            -- Some from different years
+            SELECT es.id
+            FROM existing_students es
+            WHERE es.university_id = uni_record.university_id
+            GROUP BY es.year_of_study, es.id
+            LIMIT GREATEST(total_per_uni / 3, 5)
+        )
+        LIMIT total_per_uni;
     END LOOP;
 
     RETURN;
@@ -576,6 +600,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 2. View for existing students complete data
+-- Create the complete view for existing students (used for efficient data retrieval)
 CREATE OR REPLACE VIEW existing_students_complete_view AS
 SELECT
     es.id,
@@ -583,15 +608,6 @@ SELECT
     es.program_id,
     es.year_of_study,
     es.created_at,
-
-    -- Universities and programs data
-    u.name AS university_name,
-    u.location AS university_location,
-    u.size AS university_size,
-    u.setting AS university_setting,
-    p.name AS program_name,
-    p.department AS program_department,
-    p.degree_level AS program_degree_level,
 
     -- University Info
     esui.overall_satisfaction,
@@ -649,10 +665,6 @@ SELECT
 FROM
     existing_students es
 LEFT JOIN
-    universities u ON es.university_id = u.id
-LEFT JOIN
-    programs p ON es.program_id = p.id
-LEFT JOIN
     existing_students_university_info esui ON es.id = esui.student_id
 LEFT JOIN
     existing_students_academic esa ON es.id = esa.student_id
@@ -698,9 +710,9 @@ BEGIN
             ass.passionate_activities,
 
             -- Career
-            asc.internship_importance,
-            asc.leadership_interest,
-            asc.alumni_network_value,
+            ascareer.internship_importance,
+            ascareer.leadership_interest,
+            ascareer.alumni_network_value,
 
             -- Financial
             asf.affordability_importance,
@@ -732,7 +744,7 @@ BEGIN
         LEFT JOIN
             aspiring_students_social ass ON as1.id = ass.student_id
         LEFT JOIN
-            aspiring_students_career asc ON as1.id = asc.student_id
+            aspiring_students_career ascareer ON as1.id = ascareer.student_id
         LEFT JOIN
             aspiring_students_financial asf ON as1.id = asf.student_id
         LEFT JOIN
@@ -770,9 +782,9 @@ SELECT
     ass.passionate_activities,
 
     -- Career
-    asc.internship_importance,
-    asc.leadership_interest,
-    asc.alumni_network_value,
+    ascareer.internship_importance,
+    ascareer.leadership_interest,
+    ascareer.alumni_network_value,
 
     -- Financial
     asf.affordability_importance,
@@ -804,7 +816,7 @@ LEFT JOIN
 LEFT JOIN
     aspiring_students_social ass ON as1.id = ass.student_id
 LEFT JOIN
-    aspiring_students_career asc ON as1.id = asc.student_id
+    aspiring_students_career ascareer ON as1.id = ascareer.student_id
 LEFT JOIN
     aspiring_students_financial asf ON as1.id = asf.student_id
 LEFT JOIN
@@ -931,46 +943,37 @@ JOIN
     universities u ON r.university_id = u.id;
 
 -- 7. Function to get all recommendation details for a student
-CREATE OR REPLACE FUNCTION get_all_recommendation_details(p_aspiring_student_id INT)
+CREATE OR REPLACE FUNCTION get_all_recommendation_details(p_aspiring_student_id INTEGER)
 RETURNS SETOF jsonb AS $$
 BEGIN
     RETURN QUERY
-    SELECT
-        jsonb_build_object(
-            'recommendation', to_jsonb(r),
-            'university', to_jsonb(u),
-            'similar_students', COALESCE(
-                (SELECT jsonb_agg(
-                    jsonb_build_object(
-                        'id', ss.id,
-                        'student_id', ss.existing_student_id,
-                        'overall_similarity', ss.similarity_score,
-                        'academic_similarity', ss.academic_similarity,
-                        'social_similarity', ss.social_similarity,
-                        'financial_similarity', ss.financial_similarity,
-                        'career_similarity', ss.career_similarity,
-                        'geographic_similarity', ss.geographic_similarity,
-                        'facilities_similarity', ss.facilities_similarity,
-                        'reputation_similarity', ss.reputation_similarity,
-                        'personal_fit_similarity', ss.personal_fit_similarity,
-                        'university_id', es.university_id,
-                        'university_name', u2.name
-                    )
+    SELECT jsonb_build_object(
+        'recommendation', to_jsonb(r),
+        'university', to_jsonb(u),
+        'similar_students', COALESCE(
+            (SELECT jsonb_agg(
+                jsonb_build_object(
+                    'id', ss.id,
+                    'student_id', ss.existing_student_id,
+                    'overall_similarity', ss.similarity_score,
+                    'academic_similarity', ss.academic_similarity,
+                    'social_similarity', ss.social_similarity,
+                    'financial_similarity', ss.financial_similarity,
+                    'career_similarity', ss.career_similarity,
+                    'geographic_similarity', ss.geographic_similarity,
+                    'facilities_similarity', ss.facilities_similarity,
+                    'reputation_similarity', ss.reputation_similarity,
+                    'personal_fit_similarity', ss.personal_fit_similarity
                 )
-                FROM similar_students ss
-                JOIN existing_students es ON ss.existing_student_id = es.id
-                JOIN universities u2 ON es.university_id = u2.id
-                WHERE ss.recommendation_id = r.id),
-                '[]'::jsonb
             )
+            FROM similar_students ss
+            WHERE ss.recommendation_id = r.id),
+            '[]'::jsonb
         )
-    FROM
-        recommendations r
-    JOIN
-        universities u ON r.university_id = u.id
-    WHERE
-        r.aspiring_student_id = p_aspiring_student_id
-    ORDER BY
-        r.overall_score DESC;
+    )
+    FROM recommendations r
+    JOIN universities u ON r.university_id = u.id
+    WHERE r.aspiring_student_id = p_aspiring_student_id
+    ORDER BY r.overall_score DESC;
 END;
 $$ LANGUAGE plpgsql;
