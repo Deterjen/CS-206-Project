@@ -19,6 +19,10 @@ class SupabaseDB:
         """
         self.supabase: Client = create_client(url, key)
 
+        # Add caching to reduce database hits
+        self._university_cache = {}
+        self._program_cache = {}
+
     @classmethod
     def from_env(cls):
         """
@@ -166,6 +170,11 @@ class SupabaseDB:
             List of university records
         """
         response = self.supabase.table("universities").select("*").limit(limit).offset(offset).execute()
+
+        # Update cache with fetched universities
+        for univ in response.data:
+            self._university_cache[univ["id"]] = univ
+
         return response.data
 
     def get_university_by_id(self, university_id: int) -> Optional[Dict[str, Any]]:
@@ -178,10 +187,36 @@ class SupabaseDB:
         Returns:
             University record or None if not found
         """
+        # Check cache first
+        if university_id in self._university_cache:
+            return self._university_cache[university_id]
+
+        # If not in cache, fetch from database
         response = self.supabase.table("universities").select("*").eq("id", university_id).limit(1).execute()
+
         if response.data:
+            # Update cache
+            self._university_cache[university_id] = response.data[0]
             return response.data[0]
-        return None
+
+    def get_universities_by_ids(self, university_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """
+        Get multiple universities by their IDs in a single query.
+        Returns a dictionary mapping university IDs to university data.
+        """
+        # Check which IDs we need to fetch (not in cache)
+        ids_to_fetch = [uid for uid in university_ids if uid not in self._university_cache]
+
+        # If we need to fetch any IDs
+        if ids_to_fetch:
+            response = self.supabase.table("universities").select("*").in_("id", ids_to_fetch).execute()
+
+            # Update cache with new data
+            for univ in response.data:
+                self._university_cache[univ["id"]] = univ
+
+        # Return requested universities from cache
+        return {uid: self._university_cache[uid] for uid in university_ids if uid in self._university_cache}
 
     def create_university(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -244,6 +279,11 @@ class SupabaseDB:
             query = query.eq("university_id", university_id)
 
         response = query.limit(limit).offset(offset).execute()
+
+        # Update program cache
+        for program in response.data:
+            self._program_cache[program["id"]] = program
+
         return response.data
 
     def create_program(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -260,6 +300,171 @@ class SupabaseDB:
         return response.data[0]
 
     # ===== Existing Student Operations =====
+    def get_balanced_student_sample(self, students_per_university: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get a balanced sample of students across universities to ensure diversity.
+
+        Args:
+            students_per_university: Number of students to fetch per university
+
+        Returns:
+            List of student IDs
+        """
+        # Get list of universities
+        universities = self.get_universities(limit=1000)
+
+        all_student_ids = []
+
+        # Get sample of students from each university
+        for university in universities:
+            uni_id = university["id"]
+
+            # Get sample of student IDs from this university
+            sample_response = self.supabase.table("existing_students") \
+                .select("id") \
+                .eq("university_id", uni_id) \
+                .limit(students_per_university) \
+                .execute()
+
+            # Add student IDs to our list
+            student_ids_from_uni = [s["id"] for s in sample_response.data]
+            all_student_ids.extend(student_ids_from_uni)
+
+        return all_student_ids
+
+    def get_complete_existing_students_batch(self, student_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """
+        Get multiple existing students with all their sections in a single operation.
+        Uses a more efficient approach with fewer queries.
+
+        Args:
+            student_ids: List of student IDs to fetch
+
+        Returns:
+            Dictionary mapping student IDs to complete student data
+        """
+        if not student_ids:
+            return {}
+
+        # Define all the sections we need
+        sections = [
+            "existing_students",
+            "existing_students_university_info",
+            "existing_students_academic",
+            "existing_students_social",
+            "existing_students_career",
+            "existing_students_financial",
+            "existing_students_facilities",
+            "existing_students_reputation",
+            "existing_students_personal_fit",
+            "existing_students_selection_criteria",
+            "existing_students_additional_insights"
+        ]
+
+        # Create a dictionary to store results by student ID
+        students_data = {student_id: {} for student_id in student_ids}
+
+        # Fetch each section in a single batch query
+        for section in sections:
+            # For the core table, use 'id' as the key
+            id_field = "id" if section == "existing_students" else "student_id"
+
+            # Fetch all records in this section for the given student IDs
+            response = self.supabase.table(section) \
+                .select("*") \
+                .in_(id_field, student_ids) \
+                .execute()
+
+            # Map section data to the appropriate student
+            for record in response.data:
+                student_id = record["id"] if section == "existing_students" else record["student_id"]
+
+                # Skip if student ID not in our target list
+                if student_id not in students_data:
+                    continue
+
+                # Store section type in the student data
+                section_type = section.replace("existing_students_", "") if section != "existing_students" else "core"
+                students_data[student_id][section_type] = record
+
+        return students_data
+
+    def get_aspiring_student_complete(self, student_id: int) -> Dict[str, Any]:
+        """
+        Get a complete aspiring student profile with a single efficient query.
+
+        Args:
+            student_id: ID of the aspiring student
+
+        Returns:
+            Dictionary with complete student data
+        """
+        # Define sections to fetch
+        sections = [
+            "aspiring_students",
+            "aspiring_students_academic",
+            "aspiring_students_social",
+            "aspiring_students_career",
+            "aspiring_students_financial",
+            "aspiring_students_geographic",
+            "aspiring_students_facilities",
+            "aspiring_students_reputation",
+            "aspiring_students_personal_fit"
+        ]
+
+        # Initialize result
+        result = {}
+
+        # Fetch each section with a single efficient query
+        for section in sections:
+            # For the core table, use 'id' as the key
+            id_field = "id" if section == "aspiring_students" else "student_id"
+
+            response = self.supabase.table(section) \
+                .select("*") \
+                .eq(id_field, student_id) \
+                .limit(1) \
+                .execute()
+
+            if response.data:
+                # Store section type in the result
+                section_type = section.replace("aspiring_students_", "") if section != "aspiring_students" else "core"
+                result[section_type] = response.data[0]
+
+        return result
+
+    def batch_get_existing_students(self, student_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """
+        Get multiple existing students with all their sections in a batch.
+        Returns a dictionary mapping student IDs to flattened student data.
+        """
+        if not student_ids:
+            return {}
+
+        # Get core student data
+        core_response = self.supabase.table("existing_students").select("*").in_("id", student_ids).execute()
+
+        # Create a dictionary of students by ID
+        students = {student["id"]: {"core": student} for student in core_response.data}
+
+        # Get all sections in batch queries
+        sections = [
+            "university_info", "academic", "social", "career",
+            "financial", "facilities", "reputation", "personal_fit",
+            "selection_criteria", "additional_insights"
+        ]
+
+        for section in sections:
+            table_name = f"existing_students_{section}"
+            section_response = self.supabase.table(table_name).select("*").in_("student_id", student_ids).execute()
+
+            # Add section data to the appropriate student
+            for section_data in section_response.data:
+                student_id = section_data["student_id"]
+                if student_id in students:
+                    students[student_id][section] = section_data
+
+        return students
 
     def create_existing_student(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -425,6 +630,70 @@ class SupabaseDB:
 
     # ===== Recommendation Operations =====
 
+    def save_recommendations_batch(self, aspiring_student_id: int, recommendations: List[Dict[str, Any]]) -> List[
+        Dict[str, Any]]:
+        """
+        Save multiple recommendations and their similar students in a single batch operation.
+
+        Args:
+            aspiring_student_id: The ID of the aspiring student
+            recommendations: List of recommendation data
+
+        Returns:
+            List of created recommendation records
+        """
+        if not recommendations:
+            return []
+
+        # Prepare recommendation records
+        rec_data = []
+        for rec in recommendations:
+            rec_data.append({
+                "aspiring_student_id": aspiring_student_id,
+                "university_id": rec["university_id"],
+                "overall_score": rec["overall_score"],
+                "academic_score": rec.get("academic_score", 0),
+                "social_score": rec.get("social_score", 0),
+                "financial_score": rec.get("financial_score", 0),
+                "career_score": rec.get("career_score", 0),
+                "geographic_score": rec.get("geographic_score", 0),
+                "facilities_score": rec.get("facilities_score", 0),
+                "reputation_score": rec.get("reputation_score", 0),
+                "personal_fit_score": rec.get("personal_fit_score", 0)
+            })
+
+        # Insert all recommendations in one batch
+        rec_response = self.supabase.table("recommendations").insert(rec_data).execute()
+        saved_recs = rec_response.data
+
+        # Prepare similar student records
+        similar_student_data = []
+
+        for i, rec in enumerate(recommendations):
+            recommendation_id = saved_recs[i]["id"]
+
+            # Add similar students for this recommendation
+            for student in rec.get("similar_students", []):
+                similar_student_data.append({
+                    "recommendation_id": recommendation_id,
+                    "existing_student_id": student["student_id"],
+                    "similarity_score": student["overall_similarity"],
+                    "academic_similarity": student.get("academic_similarity", 0),
+                    "social_similarity": student.get("social_similarity", 0),
+                    "financial_similarity": student.get("financial_similarity", 0),
+                    "career_similarity": student.get("career_similarity", 0),
+                    "geographic_similarity": student.get("geographic_similarity", 0),
+                    "facilities_similarity": student.get("facilities_similarity", 0),
+                    "reputation_similarity": student.get("reputation_similarity", 0),
+                    "personal_fit_similarity": student.get("personal_fit_similarity", 0)
+                })
+
+        # Save all similar students in one batch if there are any
+        if similar_student_data:
+            self.supabase.table("similar_students").insert(similar_student_data).execute()
+
+        return saved_recs
+
     def save_recommendations(self, aspiring_student_id: int, recommendations: List[Dict[str, Any]]) -> List[
         Dict[str, Any]]:
         """
@@ -480,34 +749,68 @@ class SupabaseDB:
 
         return results
 
-    def get_recommendations_for_student(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
+    def get_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
-        Get all recommendations for an aspiring student with university details.
+        Get all recommendations for an aspiring student with university and similar student details
+        in a minimal number of queries.
 
         Args:
             aspiring_student_id: The ID of the aspiring student
 
         Returns:
-            List of recommendation records with university details
+            List of recommendation data with university and similar student details
         """
-        # Get recommendations
-        response = self.supabase.table("recommendations") \
-            .select("*, universities(*)") \
+        # First, get all recommendations for this student
+        rec_response = self.supabase.table("recommendations") \
+            .select("*") \
             .eq("aspiring_student_id", aspiring_student_id) \
+            .order("overall_score", desc=True) \
             .execute()
 
-        recommendations = response.data
+        if not rec_response.data:
+            return []
 
-        # For each recommendation, get similar students
+        recommendations = rec_response.data
+        recommendation_ids = [r["id"] for r in recommendations]
+        university_ids = [r["university_id"] for r in recommendations]
+
+        # Get universities in a single query
+        univ_response = self.supabase.table("universities") \
+            .select("*") \
+            .in_("id", university_ids) \
+            .execute()
+
+        universities = {u["id"]: u for u in univ_response.data}
+
+        # Get all similar students in a single query
+        similar_students_response = self.supabase.table("similar_students") \
+            .select("*") \
+            .in_("recommendation_id", recommendation_ids) \
+            .execute()
+
+        # Organize similar students by recommendation ID
+        similar_students_by_rec = {}
+        for ss in similar_students_response.data:
+            rec_id = ss["recommendation_id"]
+            if rec_id not in similar_students_by_rec:
+                similar_students_by_rec[rec_id] = []
+            similar_students_by_rec[rec_id].append(ss)
+
+        # Build the complete recommendation data
+        detailed_recommendations = []
         for rec in recommendations:
-            similar_students_response = self.supabase.table("similar_students") \
-                .select("*, existing_students(*)") \
-                .eq("recommendation_id", rec["id"]) \
-                .execute()
+            rec_id = rec["id"]
+            university_id = rec["university_id"]
 
-            rec["similar_students"] = similar_students_response.data
+            detailed_rec = {
+                "recommendation": rec,
+                "university": universities.get(university_id, {}),
+                "similar_students": similar_students_by_rec.get(rec_id, [])
+            }
 
-        return recommendations
+            detailed_recommendations.append(detailed_rec)
+
+        return detailed_recommendations
 
     def save_similar_student(self, recommendation_id: int, student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -556,13 +859,56 @@ class SupabaseDB:
 
     def get_recommendation_with_details(self, recommendation_id: int) -> Dict[str, Any]:
         """
-        Get a recommendation with university and similar student details.
+        Get a single recommendation with all its details efficiently.
 
         Args:
             recommendation_id: The ID of the recommendation
 
         Returns:
-            Recommendation record with related details
+            Recommendation data with university and similar student details
+        """
+        # Get the recommendation
+        rec_response = self.supabase.table("recommendations") \
+            .select("*") \
+            .eq("id", recommendation_id) \
+            .limit(1) \
+            .execute()
+
+        if not rec_response.data:
+            return {}
+
+        recommendation = rec_response.data[0]
+        university_id = recommendation["university_id"]
+
+        # Get the university (use cache if available)
+        university = self.get_university_by_id(university_id)
+
+        # Get similar students
+        ss_response = self.supabase.table("similar_students") \
+            .select("*") \
+            .eq("recommendation_id", recommendation_id) \
+            .execute()
+
+        similar_students = ss_response.data
+
+        # Combine all data
+        result = {
+            "recommendation": recommendation,
+            "university": university,
+            "similar_students": similar_students
+        }
+
+        return result
+
+    def get_recommendation_with_university_and_students(self, recommendation_id: int) -> Dict[str, Any]:
+        """
+        Get a recommendation with university and similar students details in a single efficient query.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+
+        Returns:
+            Complete recommendation data with university and similar students
         """
         # Get the recommendation
         recommendation_response = self.supabase.table("recommendations").select("*").eq("id", recommendation_id).limit(
@@ -573,21 +919,50 @@ class SupabaseDB:
 
         recommendation = recommendation_response.data[0]
 
-        # Get the university
+        # Get university data (from cache if possible)
         university_id = recommendation["university_id"]
         university = self.get_university_by_id(university_id)
 
-        # Get similar students
-        similar_students = self.get_similar_students_for_recommendation(recommendation_id)
+        # Get similar students with a JOIN to existing_students
+        similar_students_response = self.supabase.table("similar_students") \
+            .select("*, existing_students!inner(*)") \
+            .eq("recommendation_id", recommendation_id) \
+            .execute()
 
-        # Combine all data
-        result = {
+        # Collect all university IDs from similar students
+        university_ids = [s["existing_students"]["university_id"] for s in similar_students_response.data]
+
+        # Fetch all universities in a single query
+        universities_map = self.get_universities_by_ids(university_ids)
+
+        # Process similar students with university data
+        similar_students = []
+        for student in similar_students_response.data:
+            student_university_id = student["existing_students"]["university_id"]
+            student_university = universities_map.get(student_university_id, {"name": "Unknown University"})
+
+            similar_students.append({
+                "id": student["id"],
+                "existing_student_id": student["existing_student_id"],
+                "similarity_score": student["similarity_score"],
+                "academic_similarity": student.get("academic_similarity", 0),
+                "social_similarity": student.get("social_similarity", 0),
+                "financial_similarity": student.get("financial_similarity", 0),
+                "career_similarity": student.get("career_similarity", 0),
+                "geographic_similarity": student.get("geographic_similarity", 0),
+                "facilities_similarity": student.get("facilities_similarity", 0),
+                "reputation_similarity": student.get("reputation_similarity", 0),
+                "personal_fit_similarity": student.get("personal_fit_similarity", 0),
+                "existing_student": student["existing_students"],
+                "university": student_university
+            })
+
+        # Return combined data
+        return {
             "recommendation": recommendation,
             "university": university,
             "similar_students": similar_students
         }
-
-        return result
 
     # ===== Feedback Operations =====
 

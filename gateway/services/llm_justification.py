@@ -1,5 +1,5 @@
 from typing import Dict, Any
-
+import re
 from jamaibase import JamAI, protocol as p
 
 
@@ -26,5 +26,22 @@ class JustificationGenerator:
             )
         )
 
-        justification = response.rows[0].columns["Justification"].text
-        return justification
+        # Extract raw text from the response
+        raw_pros = response.rows[0].columns["Pros"].text
+        raw_cons = response.rows[0].columns["Cons"].text
+        raw_conclusion = response.rows[0].columns["Conclusion"].text
+
+        # Process bullet points into a list
+        def extract_bullets(text):
+            bullets = text.split("* ")  # Split on '* ' to separate bullet points
+            bullets = [bullet.strip() for bullet in bullets if bullet.strip()]  # Remove empty strings and trim spaces
+            return bullets
+
+        pros_list = extract_bullets(raw_pros)
+        cons_list = extract_bullets(raw_cons)
+
+        return {
+            "Pros": pros_list,
+            "Cons": cons_list,
+            "Conclusion": [raw_conclusion.strip()]  # Wrap conclusion in a list for consistency
+        }
