@@ -188,8 +188,6 @@ The questionnaire for current students is divided into 10 sections:
 9. Selection Criteria
 10. Additional Insights
 
-This data forms the knowledge base for the recommendation system.
-
 ### Aspiring Student Questionnaire
 
 The questionnaire for prospective students is divided into 8 sections:

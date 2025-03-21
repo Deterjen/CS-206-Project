@@ -225,3 +225,35 @@ async def get_recommendation_details(
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+@app.get("/recommendation/justification/{username}/{recommendation_id}")
+async def get_recommendation_justification(
+        username: str,
+        recommendation_id: int,
+        current_user: User = Depends(get_current_active_user),
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only get justification for your own recommendations")
+
+        # Get recommendation details
+        recommendation_details = recommendation_service.get_recommendation_details(recommendation_id)
+
+        # Get aspiring student profile
+        aspiring_student_profile = await recommendation_service.get_aspiring_student_profile(username)
+
+        # Get similar students
+        similar_students = recommendation_service.get_similar_students(recommendation_id)
+
+        # Generate justification
+        justification = justificationGenerator.generate_justification(
+            student_profile=aspiring_student_profile,
+            recommended_university=recommendation_details["university"],
+            similar_students={"students": similar_students}
+        )
+
+        return justification
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
