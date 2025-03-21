@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Dict
 from fastapi import FastAPI, Depends, HTTPException, status
@@ -12,6 +13,7 @@ import httpx
 # Import your service and dependencies
 from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB  # Make sure this import is correct
+from services.llm_justification import JustificationGenerator
 
 app = FastAPI()
 
@@ -22,8 +24,19 @@ supabase_key = os.getenv("SUPABASE_KEY")
 # Initialize the Supabase client with the necessary parameters
 supabase_client = SupabaseDB(url=supabase_url, key=supabase_key)
 
-# Initialize the UniversityRecommendationService
-university_recommender_service = UniversityRecommendationService(supabase_client)
+logging.info("Initializing UniversityRecommendationService.")
+recommendation_service = UniversityRecommendationService(supabase_client)
+logging.info("UniversityRecommendationService initialized.")
+
+# Initialize the recommender with data
+logging.info("Initializing recommender with data.")
+recommendation_service.initialize_recommender()
+logging.info("Recommender initialized.")
+
+# Initialize the recommender with data
+logging.info("Initializing JustificationGenerator.")
+justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
+logging.info("JustificationGenerator initialized.")
 
 # Login route
 @app.post("/token", response_model=Token)
@@ -140,6 +153,7 @@ async def save_questionnaire(
 @app.get("/recommend/{username}")
 async def get_recommendation(
     username: str,
+    number_of_results: int,
     current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
 ):
     try:
@@ -148,7 +162,7 @@ async def get_recommendation(
             raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
 
         # Proceed with requesting for a recommendation if user is authenticated and authorized
-        response = await university_recommender_service.generate_recommendations(username, 3)
+        response = await recommendation_service.generate_recommendations(username, number_of_results)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
