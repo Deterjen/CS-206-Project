@@ -3,10 +3,11 @@ from typing import Dict
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.encoders import jsonable_encoder
-from auth import authenticate, create_token, get_current_active_user, create_user
-from database import update_user, delete_user
+from auth import authenticate, create_token, get_current_active_user
+# from database import update_user, delete_user
 from models import Token, User, RecommendationRequest
 from datetime import timedelta
+from utils import get_hashed_password
 import httpx
 
 # Import your service and dependencies
@@ -33,25 +34,42 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_token(data={"sub": user.username}, expires_delta=access_token_expires)
-
+    # Create a new JWT token for the authenticated user
+    access_token_expires = timedelta(minutes=30)  # Adjust as needed
+    access_token = create_token(data={"sub": user["username"]}, expires_delta=access_token_expires)
+    
     return {"access_token": access_token, "token_type": "bearer"}
 
 # Register an account route
 @app.post("/register/")
-async def register_user(username: str, email: str, name: str, password: str):
-    response = await create_user(username, email, name, password)
+async def register_user(user_data: User):
+    # Check if the email already exists in the 'auth.users' table
+    existing_email = await supabase_client.get_user_by_email(user_data.email)
+    
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-    # If there's an error in the response (e.g., username already exists), raise an HTTPException
-    if response.get("error"):
-        raise HTTPException(status_code=400, detail=response["error"])
+    # Check if the username already exists in the 'users' table
+    existing_username = await supabase_client.get_user_by_username(user_data.username)
+    
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
 
-    # Ensure that the response contains a success message and user data
-    return {"message": response["message"], "user_data": response.get("data")}
+    # Create the user using Supabase authentication API
+    try:
+        # Sign up the user via Supabase authentication (this creates an entry in 'auth.users' table)
+        response = await supabase_client.signup_user({"username": user_data.username,
+                                                       "email": user_data.email,
+                                                       "password": get_hashed_password(user_data.password)
+                                                        })
 
-# Update profile for an account route
-@app.put("/users/{username}", response_model=User)
+        return {"message": "User registered successfully", "user": response}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error registering user: {str(e)}")
+
+# Updating account credentials route
+@app.put("/user/update/{username}", response_model=User)
 async def update_user_details(
     username: str,
     new_username: str = None,
@@ -59,52 +77,67 @@ async def update_user_details(
     current_user: User = Depends(get_current_active_user),
 ):
     # Ensure the current user can only update their own details
-    if username != current_user.username:
+    if username != current_user["username"]:
         raise HTTPException(status_code=403, detail="You can only update your own account")
 
-    # Call the update function from database.py
-    response = await update_user(username, new_username, new_email)
+    try:
+        update_data = {}
+        if new_username:
+            update_data["username"] = new_username
+        if new_email:
+            update_data["email"] = new_email
 
-    if response.get("error"):
-        raise HTTPException(status_code=400, detail=response["error"])
+        # Update the user in the custom 'users' table
+        updated_user = await supabase_client.update_user(username, update_data)
 
-    # Return the full user data after the update
-    updated_user = response.get("user_data")
-    return updated_user  # This should be the full user data, matching the User model
+        if not updated_user:
+            raise HTTPException(status_code=400, detail="Failed to update user data")
+
+        return updated_user
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
 
 # Delete account route
-@app.delete("/users/{username}", response_model=Dict[str, str])
+@app.delete("/user/delete/{username}", response_model=Dict[str, str])
 async def delete_user_from_db(
     username: str,
     current_user: User = Depends(get_current_active_user),
 ):
     # Ensure the current user can only delete their own account
-    if username != current_user.username:
+    if username != current_user["username"]:
         raise HTTPException(status_code=403, detail="You can only delete your own account")
 
-    # Call the delete function from the database module
-    delete_response = await delete_user(username)
-
-    if delete_response.get("error"):
-        raise HTTPException(status_code=400, detail=delete_response["error"])
-
-    return {"message": "User deleted successfully"}
-
-# University recommendation request
-@app.post("/recommend")
-async def get_recommendations(user_data: RecommendationRequest):
-    json_payload = jsonable_encoder(user_data)
-    print("Received user data:", json_payload)  # Debugging output
-
-    # You can use the university_recommender_service to generate recommendations
     try:
-        # Assuming the recommendation service has a method like this
-        recommendations = university_recommender_service.generate_recommendations(
-            aspiring_student_id=user_data.id, top_n=10
-        )
+        # First, delete the user from the custom 'users' table
+        delete_user_response = await supabase_client.delete_user(username)
 
-        # Return the recommendations
-        return {"recommendations": recommendations}
+        if not delete_user_response:
+            raise HTTPException(status_code=400, detail="Failed to delete user data from users table")
+
+        return {"message": "User deleted successfully"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Recommendation service error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
+
+
+# University recommendation request
+from fastapi import Depends
+
+# University recommendation request
+@app.post("/save_questionaire/{username}")
+async def recommend(
+    username: str,
+    questionnaire_result: RecommendationRequest,
+    current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only request recommendations for your own account")
+
+        # Proceed with processing the questionnaire if user is authenticated and authorized
+        response = await university_recommender_service.process_questionnaire(username, dict(questionnaire_result))
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

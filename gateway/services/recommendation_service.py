@@ -182,7 +182,8 @@ class UniversityRecommendationService:
 
         return university
 
-    def process_questionnaire(self, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def process_questionnaire(self, username: str, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a complete aspiring student questionnaire.
 
@@ -197,7 +198,7 @@ class UniversityRecommendationService:
             formatted_data = self._format_aspiring_student_data(aspiring_student_data)
 
             # Create the aspiring student record
-            result = self.db.create_aspiring_student_complete(formatted_data)
+            result = self.db.create_aspiring_student_complete(username, formatted_data)
             return result
         except Exception as e:
             # Log the error
@@ -216,7 +217,7 @@ class UniversityRecommendationService:
         """
         # Initialize sections
         formatted_data = {
-            "core": {},
+            # "core": {},
             "academic": {},
             "social": {},
             "career": {},

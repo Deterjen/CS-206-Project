@@ -133,20 +133,30 @@ CREATE TABLE existing_students_additional_insights
     created_at                 TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- User to track account
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    -- is_disabled BOOLEAN NOT NUll DEFAULT FALSE
+);
+
 -- Aspiring Students tables
-CREATE TABLE aspiring_students
-(
-    id         SERIAL PRIMARY KEY,
+CREATE TABLE aspiring_students (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE REFERENCES users(id), -- Add foreign key to users table
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE aspiring_students_academic
-(
-    id                SERIAL PRIMARY KEY,
-    student_id        INTEGER REFERENCES aspiring_students (id),
-    preferred_fields  TEXT[], -- Array of selected options
-    learning_style    TEXT,
-    career_goals      TEXT,
+
+CREATE TABLE aspiring_students_academic (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES aspiring_students (id),
+    preferred_fields TEXT [], -- Array of selected options
+    learning_style TEXT,
+    career_goals TEXT,
     further_education TEXT,
     created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
