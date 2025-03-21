@@ -355,10 +355,12 @@ class UniversityRecommendationService:
         # Get the aspiring student's profile (1 query)
         logger.info(f"Fetching aspiring student profile for username {username}")
         aspiring_profile = await self.get_aspiring_student_profile(username)
+        print("aspiring student: ", aspiring_profile)
 
         # Generate recommendations using the in-memory recommender with improved vector similarity (0 queries)
         logger.info("Generating recommendations using vector similarity search")
         raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
+        print("raw recommendations: ", raw_recommendations)
 
         # Log stats
         unique_universities = len(raw_recommendations)
@@ -366,6 +368,7 @@ class UniversityRecommendationService:
 
         # Get the aspiring student ID from the username for saving recommendations
         aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
+        print("aid: ", aspiring_student_id)
 
         # Save all recommendations and similar students in a batch (1-2 queries)
         logger.info("Saving recommendations and similar students in batch")

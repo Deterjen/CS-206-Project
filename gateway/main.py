@@ -119,10 +119,6 @@ async def delete_user_from_db(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
 
-
-# University recommendation request
-from fastapi import Depends
-
 # University recommendation request
 @app.post("/save_questionaire/{username}")
 async def save_questionnaire(
@@ -137,6 +133,22 @@ async def save_questionnaire(
 
         # Proceed with processing the questionnaire if user is authenticated and authorized
         response = await university_recommender_service.process_questionnaire(username, dict(questionnaire_result))
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    
+@app.get("/recommend/{username}")
+async def get_recommendation(
+    username: str,
+    current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
+
+        # Proceed with requesting for a recommendation if user is authenticated and authorized
+        response = await university_recommender_service.generate_recommendations(username, 3)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
