@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, MapPin, Search } from "lucide-react"
+import Link from "next/link"
+import { ChevronLeft, ChevronRight, MapPin, Search, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -93,6 +94,14 @@ export default function RecommendationsPage() {
               <Search className="mr-2 h-4 w-4" />
               Find Recommendations
             </Button>
+            <div className="pt-2">
+              <Link href="/comparison">
+                <Button variant="outline" className="w-full">
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                  Compare Universities
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -174,7 +183,10 @@ export default function RecommendationsPage() {
 
           <Separator />
 
-          <div className="flex justify-end">
+          <div className="flex justify-between">
+            <Link href="/comparison">
+              <Button variant="outline">Compare with Other Universities</Button>
+            </Link>
             <Button size="lg">Apply Now</Button>
           </div>
         </div>

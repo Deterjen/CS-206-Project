@@ -242,7 +242,7 @@ export default function LandingPage() {
                     </svg>
                   ))}
                 </div>
-                <p className="text-muted-foreground mb-4">"{testimonial.quote}"</p>
+                <p className="text-muted-foreground mb-4">&quot;{testimonial.quote}&quot;</p>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-muted"></div>
                   <div>
