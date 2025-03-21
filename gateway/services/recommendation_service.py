@@ -392,17 +392,17 @@ class UniversityRecommendationService:
         details = self.db.get_recommendation_with_details(recommendation_id)
         return details.get("similar_students", [])
 
-    def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
-        """
-        Get comprehensive details for a recommendation.
-        Uses a single optimized query.
+    # def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
+    #     """
+    #     Get comprehensive details for a recommendation.
+    #     Uses a single optimized query.
 
-        Args:
-            recommendation_id: ID of the recommendation
+    #     Args:
+    #         recommendation_id: ID of the recommendation
 
-        Returns:
-            Comprehensive recommendation data
-        """
+    #     Returns:
+    #         Comprehensive recommendation data
+    #     """
         return self.db.get_recommendation_with_details(recommendation_id)
 
     async def get_recommendations_details(self, username: str) -> List[Dict[str, Any]]:
@@ -418,6 +418,7 @@ class UniversityRecommendationService:
         """
         # Get the aspiring student ID from the username
         aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
+        print(aspiring_student_id)
 
         return self.db.get_recommendations_with_details(aspiring_student_id)
 

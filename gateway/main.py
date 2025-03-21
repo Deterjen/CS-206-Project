@@ -34,9 +34,9 @@ recommendation_service.initialize_recommender()
 logging.info("Recommender initialized.")
 
 # Initialize the recommender with data
-logging.info("Initializing JustificationGenerator.")
-justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
-logging.info("JustificationGenerator initialized.")
+# logging.info("Initializing JustificationGenerator.")
+# justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
+# logging.info("JustificationGenerator initialized.")
 
 # Login route
 @app.post("/token", response_model=Token)
@@ -132,7 +132,7 @@ async def delete_user_from_db(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
 
-# University recommendation request
+# Saving questionnaire route
 @app.post("/save_questionaire/{username}")
 async def save_questionnaire(
     username: str,
@@ -149,9 +149,10 @@ async def save_questionnaire(
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-    
+
+# Generate recommendation route
 @app.get("/recommend/{username}")
-async def get_recommendation(
+async def generate_recommendation(
     username: str,
     number_of_results: int,
     current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
@@ -163,6 +164,23 @@ async def get_recommendation(
 
         # Proceed with requesting for a recommendation if user is authenticated and authorized
         response = await recommendation_service.generate_recommendations(username, number_of_results)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    
+# Getting recommendation detail route
+@app.get("/recommend/details/{username}")
+async def get_recommendation_details(
+    username: str,
+    current_user: User = Depends(get_current_active_user),  # Depend on logged-in user
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only get recommendation for your own account")
+
+        # Proceed with requesting for a recommendation if user is authenticated and authorized
+        response = await recommendation_service.get_recommendations_details(username)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
