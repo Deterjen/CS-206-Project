@@ -1,7 +1,10 @@
 import os
 from typing import List, Dict, Any, Optional
 
+from dotenv import load_dotenv
 from supabase import create_client, Client
+
+load_dotenv('.env.local')
 
 
 class SupabaseDB:
@@ -38,7 +41,7 @@ class SupabaseDB:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 
         return cls(url, key)
-    
+
     # ===== Account Oppertaions =====
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """
@@ -54,7 +57,7 @@ class SupabaseDB:
         if response.data:
             return response.data[0]
         return None
-    
+
     async def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """
         Get a user by username.
@@ -69,7 +72,7 @@ class SupabaseDB:
         if response.data:
             return response.data[0]
         return None
-    
+
     async def signup_user(self, data: Dict) -> Optional[Dict[str, Any]]:
         """
         Sign up a new user.
@@ -104,7 +107,7 @@ class SupabaseDB:
             return new_user
 
         return None
-    
+
     async def update_user(self, username: str, update_data: dict):
         """
         Update user details in the 'users' table.
@@ -154,7 +157,6 @@ class SupabaseDB:
             return response
         except Exception as e:
             raise Exception(f"Error deleting user from users table: {str(e)}")
-
 
     # ===== University Operations =====
 
@@ -633,7 +635,6 @@ class SupabaseDB:
 
         # Return or process the data
         return data
-
 
     async def create_aspiring_student_complete(self, username: str, student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
