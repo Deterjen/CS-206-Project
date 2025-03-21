@@ -155,7 +155,53 @@ class UniversityRecommendationService:
 
         return flat_data
 
-    def process_questionnaire(self, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _flatten_aspiring_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Flatten a nested aspiring student profile for the recommender.
+
+        Args:
+            student_data: Nested dictionary with aspiring student data
+
+        Returns:
+            Flat dictionary with all attributes
+        """
+        flat_data = {}
+
+        # Copy data from each section
+        for section in ["core", "academic", "social", "career", "financial",
+                        "geographic", "facilities", "reputation", "personal_fit"]:
+            if section in student_data and student_data[section]:
+                for key, value in student_data[section].items():
+                    if key not in ["id", "student_id", "created_at"]:
+                        flat_data[key] = value
+
+        return flat_data
+
+    def get_university_by_id(self, university_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a university by ID from cache or database.
+
+        Args:
+            university_id: ID of the university
+
+        Returns:
+            University data or None if not found
+        """
+        # Check cache first
+        if university_id in self._universities_cache:
+            return self._universities_cache[university_id]
+
+        # If not in cache, try to fetch from database
+        university = self.db.get_university_by_id(university_id)
+
+        # Update cache if found
+        if university:
+            self._universities_cache[university_id] = university
+
+        return university
+
+
+    def process_questionnaire(self, username: str, aspiring_student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a complete aspiring student questionnaire.
 
