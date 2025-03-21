@@ -34,6 +34,123 @@ class SupabaseDB:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 
         return cls(url, key)
+    
+    # ===== Account Oppertaions =====
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a user by email.
+
+        Args:
+            email: The email of the user
+        
+        Returns:
+            User record or None if not found
+        """
+        response = self.supabase.table("users").select("*").eq("email", email).limit(1).execute()
+        if response.data:
+            return response.data[0]
+        return None
+    
+    async def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a user by username.
+
+        Args:
+            username: The username of the user
+
+        Returns:
+            User record or None if not found
+        """
+        response = self.supabase.table("users").select("*").eq("username", username).limit(1).execute()
+        if response.data:
+            return response.data[0]
+        return None
+    
+    async def signup_user(self, data: Dict) -> Optional[Dict[str, Any]]:
+        """
+        Sign up a new user.
+
+        Args:
+            email: The email of the user
+            password: The password of the user
+
+        Returns:
+            The user data if created, or None if failed
+        """
+        # print(f"Data to be inserted: {data}")
+        # print("Before insert request")
+        response = self.supabase.table("users").insert([data]).execute()
+        # print("After insert request")
+        # print(response.data)
+
+        if response:
+            new_user = response.data[0]  # Get the newly created user
+            user_id = new_user["id"]  # Get the new user's ID
+
+            # Insert into aspiring_students with user_id as the foreign key
+            aspiring_student_data = {"user_id": user_id}  # Add more fields if necessary
+            # print("Before insert request2")
+            student_response = self.supabase.table("aspiring_students").insert([aspiring_student_data]).execute()
+            # print("After insert request2")
+
+            if student_response is None:
+                # print(f"Error inserting aspiring student: {student_response.error}")
+                raise Exception("Failed to create aspiring student entry")
+
+            return new_user
+
+        return None
+    
+    async def update_user(self, username: str, update_data: dict):
+        """
+        Update user details in the 'users' table.
+
+        Args:
+            username: The username of the user to update
+            update_data: Dictionary with fields to update
+
+        Returns:
+            The updated user record or None if not found
+        """
+        try:
+            response = self.supabase.table("users").update(update_data).eq("username", username).execute()
+            if response.data:
+                return response.data[0]
+            return None
+        except Exception as e:
+            raise Exception(f"Error updating user: {str(e)}")
+
+    async def delete_user(self, username: str):
+        """
+        Delete a user from the 'users' table.
+
+        Args:
+            username: The username of the user to delete
+
+        Returns:
+            The deleted user record or None if not found
+        """
+        try:
+            # Await the result of get_user_by_username since it is an async function
+            user = await self.get_user_by_username(username)  # Make sure to await it
+            user_id = user["id"]  # Access the user id after the user is fetched
+
+            # First, delete the related aspiring_students record
+            response2 = self.supabase.table("aspiring_students").delete().eq("user_id", user_id).execute()
+            if not response2.data:
+                print(f"No related aspiring_students record found for user {username}.")
+
+            # Now, proceed with deleting the user from the 'users' table
+            response = self.supabase.table("users").delete().eq("username", username).execute()
+            if response.data:
+                print(f"User {username} deleted successfully.")
+            else:
+                print(f"User {username} not found or failed to delete.")
+
+            return response
+        except Exception as e:
+            raise Exception(f"Error deleting user from users table: {str(e)}")
+
 
     # ===== University Operations =====
 
@@ -230,20 +347,38 @@ class SupabaseDB:
 
     # ===== Aspiring Student Operations =====
 
-    def create_aspiring_student(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new aspiring student record.
+    # def create_aspiring_student(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    #     """
+    #     Create a new aspiring student record.
 
-        Args:
-            data: Core aspiring student data to insert
+    #     Args:
+    #         data: Core aspiring student data to insert
 
-        Returns:
-            The created aspiring student record
-        """
-        response = self.supabase.table("aspiring_students").insert(data).execute()
-        return response.data[0]
+    #     Returns:
+    #         The created aspiring student record
+    #     """
+    #     response = self.supabase.table("aspiring_students").insert(data).execute()
+    #     return response.data[0]
 
-    def create_aspiring_student_complete(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_aspiring_student(self, username) -> Dict[str, Any]:
+        user = await self.get_user_by_username(username)
+
+        user_id = user["id"]
+
+        response = self.supabase.table("aspiring_students").select("*").eq("user_id", user_id).limit(1).execute()
+
+        # Get the data from the APIResponse object
+        data = response.data  # This will give you the actual data from the response.
+
+        # Handle the case where no data is found
+        if not data:
+            raise ValueError(f"No aspiring student found with user_id {user_id}")
+
+        # Return or process the data
+        return data
+
+
+    async def create_aspiring_student_complete(self, username: str, student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a complete aspiring student record with all related sections.
 
@@ -263,16 +398,23 @@ class SupabaseDB:
         results = {}
 
         # Insert core student data
-        core_response = self.supabase.table("aspiring_students").insert(student_data.get("core", {})).execute()
-        student_id = core_response.data[0]["id"]
-        results["core"] = core_response.data[0]
+        # core_response = self.supabase.table("aspiring_students").insert(student_data.get("core", {})).execute()
+        # student_id = core_response.data[0]["id"]
+        # results["core"] = core_response.data[0]
+
+        # Get the aspiring student
+        aspiring_student = await self.get_aspiring_student(username)
+
+        if aspiring_student is None:
+            return {"error": "No aspiring student found"}
+        aspiring_student_id = aspiring_student[0]["id"]
 
         # Add student_id to all section data
         for section in ["academic", "social", "career", "financial",
                         "geographic", "facilities", "reputation", "personal_fit"]:
             if section in student_data:
                 section_data = student_data[section]
-                section_data["student_id"] = student_id
+                section_data["student_id"] = aspiring_student_id
 
                 # Insert section data
                 table_name = f"aspiring_students_{section}"
