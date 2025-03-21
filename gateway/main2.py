@@ -71,7 +71,7 @@ async def main():
         "lifestyle_preferences": "Active campus life with balance between academics and social"
     }
 
-    username = "test_user"
+    username = "string"
 
     # Sign up the user via Supabase authentication (this creates an entry in 'auth.users' table)
     # response = await supabase_db.signup_user({"username": username,
@@ -104,21 +104,21 @@ async def main():
     with open("recommendation_data.json", "w") as f:
         json.dump(all_recommendations, f, indent=2)
 
-    # # Get Justification
-    # logging.info("Getting justification.")
-    # student_profile = recommendation_service.get_aspiring_student_profile(student_id)
-    # recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
-    # # similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
-    # # Extract only the 'recommendation' and 'university' keys from recommendation_details
-    # recommendation_and_university = {
-    #     "recommendation": recommendation_details["recommendation"],
-    #     "university": recommendation_details["university"]
-    # }
-    #
-    # # Pass the extracted data to the generate_justification method
-    # justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
-    #                                                               recommendation_details['similar_students'])
-    # logging.info(f"\nJustification: \n{justification}")
+    # Get Justification
+    logging.info("Getting justification.")
+    student_profile = await recommendation_service.get_aspiring_student_profile(username)
+    recommendation_details = recommendation_service.get_recommendation_details(recommendations[0]["id"])
+    # similar_students = recommendation_service.get_similar_students(student_id, top_n=3)
+    # Extract only the 'recommendation' and 'university' keys from recommendation_details
+    recommendation_and_university = {
+        "recommendation": recommendation_details["recommendation"],
+        "university": recommendation_details["university"]
+    }
+
+    # Pass the extracted data to the generate_justification method
+    justification = justificationGenerator.generate_justification(student_profile, recommendation_and_university,
+                                                                  recommendation_details['similar_students'])
+    logging.info(f"\nJustification: \n{justification}")
 
 
 if __name__ == '__main__':
