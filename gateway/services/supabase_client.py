@@ -302,14 +302,20 @@ class SupabaseDB:
         return response.data[0]
 
     # ===== Existing Student Operations =====
-    def get_balanced_student_sample(self, students_per_university: int = 50) -> List[int]:
+    def get_university_student_counts(self):
+        """Get counts of students per university"""
+        response = self.supabase.rpc('get_university_student_counts').execute()
+        return response.data
+
+    # Enhance your existing get_balanced_student_sample with more flexibility
+    def get_balanced_student_sample(self, students_per_university=50, min_students_per_university=20):
         """
         Get a balanced sample of students across universities to ensure diversity.
-        Enhanced to retrieve students based on their similarity potential rather than
-        fixed sampling.
+        Enhanced to retrieve students based on their similarity potential.
 
         Args:
             students_per_university: Maximum number of students to fetch per university
+            min_students_per_university: Minimum number of students to fetch per university
 
         Returns:
             List of student IDs
@@ -322,17 +328,13 @@ class SupabaseDB:
         for university in universities:
             uni_id = university["id"]
 
-            # Fetch a variety of student profiles with diverse programs, years of study, etc.
-            # This approach yields more representative samples
-
-            # First, get programs offered at this university
+            # Strategy 1: Get students from each program (diversity by subject area)
             programs = self.get_programs(university_id=uni_id)
             program_ids = [p["id"] for p in programs]
 
             if not program_ids:
                 continue
 
-            # Strategy 1: Get students from each program (diversity by subject area)
             for program_id in program_ids:
                 # Get a small sample from each program
                 program_sample = self.supabase.table("existing_students") \
@@ -346,14 +348,13 @@ class SupabaseDB:
                 all_student_ids.extend(student_ids_from_program)
 
             # Strategy 2: Get students with high satisfaction (quality responses)
-            satisfied_students = self.supabase.table("existing_students") \
-                .select("id") \
-                .eq("university_id", uni_id) \
-                .order("id", desc=True) \
+            satisfied_students = self.supabase.table("existing_students_university_info") \
+                .select("student_id") \
+                .order("overall_satisfaction", desc=True) \
                 .limit(students_per_university // 4) \
                 .execute()
 
-            all_student_ids.extend([s["id"] for s in satisfied_students.data])
+            all_student_ids.extend([s["student_id"] for s in satisfied_students.data])
 
             # Strategy 3: Get students from different years of study (diversity by experience)
             years = ["1st year", "2nd year", "3rd year", "4th year", "5+ years", "Postgraduate"]
@@ -367,22 +368,19 @@ class SupabaseDB:
 
                 all_student_ids.extend([s["id"] for s in year_sample.data])
 
-            # Ensure we don't exceed the maximum per university
-            # De-duplicate IDs we may have retrieved in multiple queries
-            uni_student_ids = list(set(id for id in all_student_ids if id is not None))
-
-            # If we have more than we need, sample down to the limit
-            if len(uni_student_ids) > students_per_university:
-                import random
-                uni_student_ids = random.sample(uni_student_ids, students_per_university)
-
-        # Remove duplicates from the final list while maintaining order
+        # Remove duplicates while maintaining order
         seen = set()
         unique_student_ids = []
         for student_id in all_student_ids:
             if student_id not in seen and student_id is not None:
                 seen.add(student_id)
                 unique_student_ids.append(student_id)
+
+        # Limit to a reasonable number if needed
+        max_total = 1000  # Adjust as needed
+        if len(unique_student_ids) > max_total:
+            import random
+            unique_student_ids = random.sample(unique_student_ids, max_total)
 
         return unique_student_ids
 
@@ -442,6 +440,10 @@ class SupabaseDB:
                 students_data[student_id][section_type] = record
 
         return students_data
+
+    def refresh_top_university_students(self):
+        """Refresh the top_university_students materialized view"""
+        self.supabase.rpc('refresh_top_university_students').execute()
 
     def get_aspiring_student_complete(self, student_id: int) -> Dict[str, Any]:
         """
