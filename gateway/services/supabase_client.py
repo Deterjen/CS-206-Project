@@ -307,66 +307,48 @@ class SupabaseDB:
         response = self.supabase.rpc('get_university_student_counts').execute()
         return response.data
 
-    # Enhance your existing get_balanced_student_sample with more flexibility
-    def get_balanced_student_sample(self, students_per_university=50, min_students_per_university=20):
+    def get_balanced_student_sample(self, students_per_university=50):
         """
-        Get a balanced sample of students across universities to ensure diversity.
-        Enhanced to retrieve students based on their similarity potential.
-
-        Args:
-            students_per_university: Maximum number of students to fetch per university
-            min_students_per_university: Minimum number of students to fetch per university
+        Get a balanced sample of students across universities with minimal queries.
 
         Returns:
             List of student IDs
         """
         # Get list of universities
-        universities = self.get_universities(limit=1000)
-
+        universities = self.get_universities(limit=10)  # Limit to 10 universities
         all_student_ids = []
 
         for university in universities:
             uni_id = university["id"]
 
-            # Strategy 1: Get students from each program (diversity by subject area)
-            programs = self.get_programs(university_id=uni_id)
-            program_ids = [p["id"] for p in programs]
+            # 1. Get a sample of students distributed across programs
+            # Get top programs for this university
+            programs = self.get_programs(university_id=uni_id, limit=5)  # Limit to top 5 programs
 
-            if not program_ids:
-                continue
+            if programs:
+                # Get students from each program (5 per program)
+                students_per_program = max(2, students_per_university // (len(programs) * 2))
+                program_ids = [p["id"] for p in programs]
 
-            for program_id in program_ids:
-                # Get a small sample from each program
+                # Use a single query with IN operator for all programs
                 program_sample = self.supabase.table("existing_students") \
                     .select("id") \
                     .eq("university_id", uni_id) \
-                    .eq("program_id", program_id) \
-                    .limit(max(2, students_per_university // len(program_ids))) \
+                    .in_("program_id", program_ids) \
+                    .limit(students_per_program * len(program_ids)) \
                     .execute()
 
-                student_ids_from_program = [s["id"] for s in program_sample.data]
-                all_student_ids.extend(student_ids_from_program)
+                all_student_ids.extend([s["id"] for s in program_sample.data])
 
-            # Strategy 2: Get students with high satisfaction (quality responses)
-            satisfied_students = self.supabase.table("existing_students_university_info") \
-                .select("student_id") \
-                .order("overall_satisfaction", desc=True) \
-                .limit(students_per_university // 4) \
-                .execute()
+            # 2. Get another sample from this university using year of study as filter
+            years_sample = (self.supabase.table("existing_students")
+                            .select("id")
+                            .eq("university_id", uni_id)
+                            .order("id")
+                            .limit(students_per_university // 2)
+                            .execute())
 
-            all_student_ids.extend([s["student_id"] for s in satisfied_students.data])
-
-            # Strategy 3: Get students from different years of study (diversity by experience)
-            years = ["1st year", "2nd year", "3rd year", "4th year", "5+ years", "Postgraduate"]
-            for year in years:
-                year_sample = self.supabase.table("existing_students") \
-                    .select("id") \
-                    .eq("university_id", uni_id) \
-                    .eq("year_of_study", year) \
-                    .limit(students_per_university // len(years)) \
-                    .execute()
-
-                all_student_ids.extend([s["id"] for s in year_sample.data])
+        all_student_ids.extend([s["id"] for s in years_sample.data])
 
         # Remove duplicates while maintaining order
         seen = set()
@@ -376,18 +358,36 @@ class SupabaseDB:
                 seen.add(student_id)
                 unique_student_ids.append(student_id)
 
-        # Limit to a reasonable number if needed
-        max_total = 1000  # Adjust as needed
-        if len(unique_student_ids) > max_total:
-            import random
-            unique_student_ids = random.sample(unique_student_ids, max_total)
-
         return unique_student_ids
+
+    def get_aspiring_student_complete_with_single_query(self, student_id: int) -> Dict[str, Any]:
+        """
+        Get complete aspiring student data with all sections in a single query.
+
+        Args:
+            student_id: ID of the aspiring student
+
+        Returns:
+            Complete aspiring student record
+        """
+        # Using the existing view for efficient retrieval
+        query = f"""
+        SELECT *
+        FROM aspiring_student_complete_view
+        WHERE id = $1
+        LIMIT 1
+        """
+
+        response = self.supabase.rpc('run_query', {'query': query, 'params': [student_id]}).execute()
+
+        if not response.data or len(response.data) == 0:
+            return None
+
+        return response.data[0]
 
     def get_complete_existing_students_batch(self, student_ids: List[int]) -> Dict[int, Dict[str, Any]]:
         """
-        Get multiple existing students with all their sections in a single operation.
-        Uses a more efficient approach with fewer queries.
+        Get multiple existing students with all their sections in a minimal number of queries.
 
         Args:
             student_ids: List of student IDs to fetch
@@ -398,46 +398,42 @@ class SupabaseDB:
         if not student_ids:
             return {}
 
-        # Define all the sections we need
-        sections = [
-            "existing_students",
-            "existing_students_university_info",
-            "existing_students_academic",
-            "existing_students_social",
-            "existing_students_career",
-            "existing_students_financial",
-            "existing_students_facilities",
-            "existing_students_reputation",
-            "existing_students_personal_fit",
-            "existing_students_selection_criteria",
-            "existing_students_additional_insights"
-        ]
-
         # Create a dictionary to store results by student ID
         students_data = {student_id: {} for student_id in student_ids}
 
-        # Fetch each section in a single batch query
-        for section in sections:
-            # For the core table, use 'id' as the key
-            id_field = "id" if section == "existing_students" else "student_id"
+        # Fetch core student data
+        core_response = self.supabase.table("existing_students").select("*").in_("id", student_ids).execute()
 
-            # Fetch all records in this section for the given student IDs
-            response = self.supabase.table(section) \
-                .select("*") \
-                .in_(id_field, student_ids) \
-                .execute()
+        # Initialize with core data
+        for student in core_response.data:
+            student_id = student["id"]
+            students_data[student_id]["core"] = student
+
+        # Fetch all section data with just TWO batch queries instead of ten separate queries
+        # 1. Academic and social sections
+        academic_sections = ["university_info", "academic", "social", "career", "financial"]
+        for section in academic_sections:
+            table_name = f"existing_students_{section}"
+            section_response = self.supabase.table(table_name).select("*").in_("student_id", student_ids).execute()
 
             # Map section data to the appropriate student
-            for record in response.data:
-                student_id = record["id"] if section == "existing_students" else record["student_id"]
+            for record in section_response.data:
+                student_id = record["student_id"]
+                if student_id in students_data:
+                    students_data[student_id][section] = record
 
-                # Skip if student ID not in our target list
-                if student_id not in students_data:
-                    continue
+        # 2. Preferences and insights sections
+        preference_sections = ["facilities", "reputation", "personal_fit",
+                               "selection_criteria", "additional_insights"]
+        for section in preference_sections:
+            table_name = f"existing_students_{section}"
+            section_response = self.supabase.table(table_name).select("*").in_("student_id", student_ids).execute()
 
-                # Store section type in the student data
-                section_type = section.replace("existing_students_", "") if section != "existing_students" else "core"
-                students_data[student_id][section_type] = record
+            # Map section data to the appropriate student
+            for record in section_response.data:
+                student_id = record["student_id"]
+                if student_id in students_data:
+                    students_data[student_id][section] = record
 
         return students_data
 
@@ -684,11 +680,10 @@ class SupabaseDB:
         return results
 
     # ===== Recommendation Operations =====
-
     def save_recommendations_batch(self, aspiring_student_id: int, recommendations: List[Dict[str, Any]]) -> List[
         Dict[str, Any]]:
         """
-        Save multiple recommendations and their similar students in a single batch operation.
+        Save multiple recommendations and their similar students with minimal queries.
 
         Args:
             aspiring_student_id: The ID of the aspiring student
@@ -717,19 +712,24 @@ class SupabaseDB:
                 "personal_fit_score": rec.get("personal_fit_score", 0)
             })
 
-        # Insert all recommendations in one batch
+        # Insert all recommendations in a single batch
         rec_response = self.supabase.table("recommendations").insert(rec_data).execute()
         saved_recs = rec_response.data
 
-        # Prepare similar student records
-        similar_student_data = []
+        # Collect all similar students for all recommendations
+        all_similar_students = []
 
         for i, rec in enumerate(recommendations):
+            if i >= len(saved_recs):
+                break
+
             recommendation_id = saved_recs[i]["id"]
 
-            # Add similar students for this recommendation
-            for student in rec.get("similar_students", []):
-                similar_student_data.append({
+            # Limit to top 3 similar students per recommendation to reduce data size
+            top_similar = rec.get("similar_students", [])[:3]
+
+            for student in top_similar:
+                all_similar_students.append({
                     "recommendation_id": recommendation_id,
                     "existing_student_id": student["student_id"],
                     "similarity_score": student["overall_similarity"],
@@ -743,9 +743,9 @@ class SupabaseDB:
                     "personal_fit_similarity": student.get("personal_fit_similarity", 0)
                 })
 
-        # Save all similar students in one batch if there are any
-        if similar_student_data:
-            self.supabase.table("similar_students").insert(similar_student_data).execute()
+        # Save all similar students in a single batch
+        if all_similar_students:
+            self.supabase.table("similar_students").insert(all_similar_students).execute()
 
         return saved_recs
 
