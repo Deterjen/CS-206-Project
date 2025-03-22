@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from services.llm_justification import JustificationGenerator
 from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB
+from utils import get_hashed_password
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -74,10 +75,10 @@ async def main():
     username = "string"
 
     # Sign up the user via Supabase authentication (this creates an entry in 'auth.users' table)
-    # response = await supabase_db.signup_user({"username": username,
-    #                                           "email": "test@gmail.com",
-    #                                           "password": get_hashed_password("abcd")
-    #                                           })
+    response = await supabase_db.signup_user({"username": username,
+                                              "email": "test@gmail.com",
+                                              "password": get_hashed_password("string")
+                                              })
 
     # Process the questionnaire and create student profile
     student_record = await recommendation_service.process_questionnaire(username, questionnaire_data)
@@ -97,7 +98,7 @@ async def main():
     recommendation_details = recommendation_service.get_recommendation_details(first_recommendation_id)
 
     # Alternatively, get all recommendations with details at once
-    all_recommendations = await recommendation_service.get_recommendations_details(username)
+    all_recommendations = await recommendation_service.get_all_recommendations_details(username)
     print(f"\nRetrieved {len(all_recommendations)} recommendations with full details")
 
     # Example of saving comprehensive data to file for debugging

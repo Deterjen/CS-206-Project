@@ -85,6 +85,7 @@ class UniversityRecommendationService:
     def _load_representative_student_sample(self):
         """
         Load a representative sample of student profiles for recommendation
+        OPTIMIZED: Reduce queries by loading data in larger batches
         """
         # Get a balanced and diverse sample across universities and programs
         student_ids = self.db.get_balanced_student_sample(students_per_university=100)
@@ -92,8 +93,8 @@ class UniversityRecommendationService:
         total_students = len(student_ids)
         logger.info(f"Selected {total_students} diverse student profiles for vector indexing")
 
-        # Process in batches to avoid memory issues
-        batch_size = 100
+        # Process in larger batches to reduce query count
+        batch_size = 250  # Increased from 100
         for i in range(0, total_students, batch_size):
             batch_ids = student_ids[i:i + batch_size]
             logger.info(f"Loading student batch {i + 1}-{min(i + batch_size, total_students)} of {total_students}...")
@@ -108,6 +109,30 @@ class UniversityRecommendationService:
                     self._existing_students_cache[student_id] = flat_student
 
         logger.info(f"Successfully loaded {len(self._existing_students_cache)} complete student profiles")
+
+    def _flatten_complete_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process a complete student record from the joined query into a flat structure.
+
+        Args:
+            student_data: Complete student record from the database
+
+        Returns:
+            Flattened student data for the recommender
+        """
+        flat_data = {
+            'id': student_data.get('id'),
+            'university_id': student_data.get('university_id'),
+            'program_id': student_data.get('program_id'),
+            'year_of_study': student_data.get('year_of_study')
+        }
+
+        # Copy all attributes directly - they're already flattened in the view
+        for key, value in student_data.items():
+            if key not in flat_data and key != 'created_at':
+                flat_data[key] = value
+
+        return flat_data
 
     def _flatten_existing_student(self, student_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -300,8 +325,7 @@ class UniversityRecommendationService:
 
     async def get_aspiring_student_profile(self, username: str) -> Dict[str, Any]:
         """
-        Get a complete aspiring student profile for the recommender.
-        Optimized to use a single query and return a flat structure.
+        Get a complete aspiring student profile for the recommender with minimal queries.
 
         Args:
             username: Username of the aspiring student
@@ -309,16 +333,44 @@ class UniversityRecommendationService:
         Returns:
             Flat dictionary with all student attributes
         """
-        # Get the aspiring student ID from the username
-        aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
+        # Get the user and aspiring student in two queries
+        user = await self.db.get_user_by_username(username)
+        if not user:
+            raise ValueError(f"User {username} not found")
 
-        # Get the complete profile data with a single optimized query
-        profile_data = self.db.get_aspiring_student_complete(aspiring_student_id)
+        user_id = user["id"]
 
-        if not profile_data:
-            raise ValueError(f"Aspiring student with ID {aspiring_student_id} not found")
+        # Get the aspiring student
+        aspiring_student_response = self.db.supabase.table("aspiring_students").select("*").eq("user_id",
+                                                                                               user_id).limit(
+            1).execute()
+        if not aspiring_student_response.data:
+            raise ValueError(f"Aspiring student for user {username} not found")
 
-        # Convert to flat structure for the recommender
+        aspiring_student_id = aspiring_student_response.data[0]["id"]
+
+        # Now fetch all sections in two batches
+        profile_data = {"core": aspiring_student_response.data[0]}
+
+        # Batch 1: Core preference sections
+        sections1 = ["academic", "social", "career", "financial"]
+        for section in sections1:
+            table = f"aspiring_students_{section}"
+            response = self.db.supabase.table(table).select("*").eq("student_id", aspiring_student_id).limit(
+                1).execute()
+            if response.data:
+                profile_data[section] = response.data[0]
+
+        # Batch 2: Additional preference sections
+        sections2 = ["geographic", "facilities", "reputation", "personal_fit"]
+        for section in sections2:
+            table = f"aspiring_students_{section}"
+            response = self.db.supabase.table(table).select("*").eq("student_id", aspiring_student_id).limit(
+                1).execute()
+            if response.data:
+                profile_data[section] = response.data[0]
+
+        # Convert to flat structure
         flat_profile = self._flatten_aspiring_student(profile_data)
 
         return flat_profile
@@ -354,23 +406,35 @@ class UniversityRecommendationService:
         """
         # Get the aspiring student's profile (1 query)
         logger.info(f"Fetching aspiring student profile for username {username}")
-        aspiring_profile = await self.get_aspiring_student_profile(username)
-        # print("aspiring student: ", aspiring_profile)
 
-        # Generate recommendations using the in-memory recommender with improved vector similarity (0 queries)
+        # Get the aspiring student ID and profile in a single query
+        user = await self.db.get_user_by_username(username)
+        if not user:
+            raise ValueError(f"User with username {username} not found")
+
+        aspiring_student = await self.db.get_aspiring_student(username)
+        if not aspiring_student or not aspiring_student[0]:
+            raise ValueError(f"Aspiring student with username {username} not found")
+
+        aspiring_student_id = aspiring_student[0]["id"]
+
+        # Get the profile with a single query
+        profile_data = self.db.get_aspiring_student_complete(aspiring_student_id)
+        if not profile_data:
+            raise ValueError(f"Aspiring student with ID {aspiring_student_id} not found")
+
+        # Convert to flat structure for the recommender
+        aspiring_profile = self._flatten_aspiring_student(profile_data)
+
+        # Generate recommendations using the in-memory recommender (0 queries)
         logger.info("Generating recommendations using vector similarity search")
         raw_recommendations = self.recommender.recommend_universities(aspiring_profile, top_n=top_n)
-        # print("raw recommendations: ", raw_recommendations)
 
         # Log stats
         unique_universities = len(raw_recommendations)
         logger.info(f"Generated {unique_universities} unique university recommendations")
 
-        # Get the aspiring student ID from the username for saving recommendations
-        aspiring_student_id = await self._get_aspiring_student_id_from_username(username)
-        # print("aid: ", aspiring_student_id)
-
-        # Save all recommendations and similar students in a batch (1-2 queries)
+        # Save all recommendations and similar students in a batch (1 query instead of many)
         logger.info("Saving recommendations and similar students in batch")
         saved_recommendations = self.db.save_recommendations_batch(aspiring_student_id, raw_recommendations)
 
@@ -393,17 +457,17 @@ class UniversityRecommendationService:
         return details.get("similar_students", [])
 
     def get_recommendation_details(self, recommendation_id: int) -> Dict[str, Any]:
-    #     """
-    #     Get comprehensive details for a recommendation.
-    #     Uses a single optimized query.
+        #     """
+        #     Get comprehensive details for a recommendation.
+        #     Uses a single optimized query.
 
-    #     Args:
-    #         recommendation_id: ID of the recommendation
+        #     Args:
+        #         recommendation_id: ID of the recommendation
 
-    #     Returns:
-    #         Comprehensive recommendation data
-    #     """
-        return  self.db.get_recommendation_with_details(recommendation_id)
+        #     Returns:
+        #         Comprehensive recommendation data
+        #     """
+        return self.db.get_recommendation_with_details(recommendation_id)
 
     async def get_all_recommendations_details(self, username: str) -> List[Dict[str, Any]]:
         """
