@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, GraduationCap, Search, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import SupabaseTest from '@/components/SupabaseTest';
 
 export default function LandingPage() {
   return (
@@ -350,6 +351,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <SupabaseTest />
     </div>
   );
 }
