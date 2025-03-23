@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { Eye, EyeOff, Github, GraduationCap, Loader2, Mail } from "lucide-react"
+import { Eye, EyeOff, Github, GraduationCap, Loader2} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -229,7 +229,7 @@ export default function AuthPage() {
               </CardContent>
               <CardFooter className="flex flex-col">
                 <p className="mt-2 text-xs text-center text-muted-foreground">
-                  Don't have an account?{" "}
+                  Don&apos;t have an account?{" "}
                   <button className="text-primary hover:underline" onClick={() => setActiveTab("signup")}>
                     Sign up
                   </button>

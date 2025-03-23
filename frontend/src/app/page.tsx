@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, GraduationCap, Search, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import SupabaseTest from '@/components/SupabaseTest';
 
 export default function LandingPage() {
   return (
@@ -25,8 +26,8 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/profile/setup">
-              <Button variant="outline">Sign Up</Button>
+            <Link href="/auth">
+              <Button variant="outline">Log In</Button>
             </Link>
             <Link href="/auth">
               <Button>Get Started</Button>
@@ -242,7 +243,7 @@ export default function LandingPage() {
                     </svg>
                   ))}
                 </div>
-                <p className="text-muted-foreground mb-4">"{testimonial.quote}"</p>
+                <p className="text-muted-foreground mb-4">&quot;{testimonial.quote}&quot;</p>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-muted"></div>
                   <div>
@@ -350,6 +351,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <SupabaseTest />
     </div>
   );
 }

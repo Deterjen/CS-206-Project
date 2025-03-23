@@ -1,3 +1,68 @@
-.idea
-.vscode
+# Dependencies
+node_modules/
+py-backend/venv/
+py-backend/__pycache__/
+**/*.pyc
+.pnp
+.pnp.js
+
+# Environment Variables and Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+.env*.local
+
+# Build and Cache
+.next/
+out/
+build/
+dist/
+.cache/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+.turbo
+
+# Debug and Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*.bak
+*.sublime*
+.DS_Store
+
+# Project specific
 py-backend/recommendation_data.json
+py-backend/data/out/
+postgres-data/
+
+# Testing
+/coverage
+.nyc_output
+
+# Local Supabase
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
