@@ -5,15 +5,15 @@ import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen items-center">
+    <div className="flex flex-col min-h-screen snap-y snap-proximity overflow-y-scroll h-screen">
       {/* Navigation */}
-      <header className="border-b w-full">
-        <div className="container mx-auto flex h-16 items-center justify-between">
+      <header className="border-b w-full sticky top-0 bg-background/95 z-10">
+        <div className="container mx-auto flex h-16 items-center justify-between px-8">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-6 w-6" />
             <span className="text-xl font-bold">Unify</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex gap-6 pl-22">
             <Link href="#features" className="text-sm font-medium hover:underline">
               Features
             </Link>
@@ -28,7 +28,7 @@ export default function LandingPage() {
             <Link href="/profile/setup">
               <Button variant="outline">Sign Up</Button>
             </Link>
-            <Link href="/recommendations">
+            <Link href="/auth">
               <Button>Get Started</Button>
             </Link>
           </div>
@@ -36,7 +36,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 md:py-28 w-full">
+      <section className="py-20 md:py-28 min-h-screen w-full">
         <div className="container mx-auto flex flex-col items-center text-center">
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-3xl">
             Find Your Perfect University Match
@@ -62,7 +62,7 @@ export default function LandingPage() {
       </section>
 
       {/* Feature Highlights */}
-      <section id="features" className="py-20 bg-muted/50 w-full">
+      <section id="features" className="py-20 bg-muted/50 w-full snap-center">
         <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Why Choose Unify</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 place-items-center">
@@ -98,7 +98,7 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-20 w-full">
+      <section id="how-it-works" className="py-20 w-full snap-center">
         <div className="container mx-auto px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How It Works</h2>
           <div className="grid md:grid-cols-2 gap-12 items-center justify-items-center">
@@ -162,7 +162,7 @@ export default function LandingPage() {
       </section>
 
       {/* University Showcase */}
-      <section className="py-20 bg-muted/50 w-full">
+      <section className="py-20 bg-muted/50 w-full snap-center">
         <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">Find Your Perfect Match</h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-16">
@@ -200,7 +200,7 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="py-20 w-full">
+      <section id="testimonials" className="py-20 w-full snap-center">
         <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">What Our Users Say</h2>
           <div className="grid md:grid-cols-3 gap-8 place-items-center">
@@ -257,13 +257,13 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-primary text-primary-foreground w-full">
+      <section className="py-20 bg-primary text-primary-foreground w-full snap-center">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Perfect University?</h2>
           <p className="text-xl mb-10 max-w-2xl mx-auto opacity-90">
             Create your profile today and get personalized university recommendations.
           </p>
-          <Link href="/profile/setup">
+          <Link href="/auth">
             <Button size="lg" variant="secondary" className="px-8">
               Get Started Now
               <ArrowRight className="ml-2 h-4 w-4" />
