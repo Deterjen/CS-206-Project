@@ -1,3 +1,7 @@
 .idea
 .vscode
 py-backend/recommendation_data.json
+gateway/venv
+gateway/supabase
+gateway/node_modules
+gateway/.env.local

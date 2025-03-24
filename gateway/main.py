@@ -14,8 +14,18 @@ from services.llm_justification import JustificationGenerator
 from services.recommendation_service import UniversityRecommendationService
 from services.supabase_client import SupabaseDB  # Make sure this import is correct
 from utils import get_hashed_password
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Allow frontend requests from localhost:3000
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Allows only frontend requests
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
 
 # Initialize the Supabase client with the necessary parameters
 supabase_client = SupabaseDB.from_env()
@@ -38,8 +48,8 @@ logging.info("JustificationGenerator initialized.")
 # Login route
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    print(form_data)
     user = await authenticate(form_data.username, form_data.password)
-
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 

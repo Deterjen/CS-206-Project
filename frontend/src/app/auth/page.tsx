@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import axios from "axios"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -14,9 +15,10 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
+import apiClient from "../../api/apiClient"
 
 const loginSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  username: z.string().email({message: "Please enter a valid email address" }),
   password: z.string().min(1, { message: "Password is required" }),
   rememberMe: z.boolean().optional(),
 })
@@ -47,11 +49,15 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-
+  const [error, setError] = useState('');
+  // const apiClient = axios.create({
+  //   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  // });
+  
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      username: "",
       password: "",
       rememberMe: false,
     },
@@ -68,14 +74,39 @@ export default function AuthPage() {
     },
   })
 
-  function onLoginSubmit(values: z.infer<typeof loginSchema>) {
-    setIsLoading(true)
-    console.log(values)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push("/profile/")
-    }, 1500)
+  // function onLoginSubmit(values: z.infer<typeof loginSchema>) {
+  //   setIsLoading(true)
+  //   console.log(values)
+  //   // Simulate API call
+  //   setTimeout(() => {
+  //     setIsLoading(false)
+  //     router.push("/profile/")
+  //   }, 1500)
+  // }
+
+  async function onLoginSubmit(values: z.infer<typeof loginSchema>) {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.post('/token', values, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        transformRequest: [(data) => {
+          const params = new URLSearchParams();
+          params.append('grant_type', 'password');
+          params.append('username', data.username);
+          params.append('password', data.password);
+          return params.toString();
+        }],
+      });
+      // Store the JWT token in localStorage
+      localStorage.setItem('token', response.data.access_token);
+      // Redirect to the dashboard
+      router.push('/dashboard');
+    } catch (error) {
+      setError('Invalid email or password');
+      setIsLoading(false);
+    }
   }
 
   function onSignupSubmit(values: z.infer<typeof signupSchema>) {
@@ -119,7 +150,7 @@ export default function AuthPage() {
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="signup">Sign Up</TabsTrigger>
           </TabsList>
-
+          {error && <p className="text-red-500 mb-4">{error}</p>}
           <TabsContent value="login">
             <Card>
               <CardHeader>
@@ -153,7 +184,7 @@ export default function AuthPage() {
                   <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
                     <FormField
                       control={loginForm.control}
-                      name="email"
+                      name="username"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Email</FormLabel>
