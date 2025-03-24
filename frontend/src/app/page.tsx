@@ -25,7 +25,7 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/profile/setup">
+            <Link href="/auth">
               <Button variant="outline">Sign Up</Button>
             </Link>
             <Link href="/auth">

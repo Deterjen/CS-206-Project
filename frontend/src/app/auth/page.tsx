@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import axios from "axios"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { Eye, EyeOff, Github, GraduationCap, Loader2, Mail } from "lucide-react"
+import { Eye, EyeOff, Github, GraduationCap, Loader2 } from "lucide-react"
+import { AxiosError } from "axios"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import apiClient from "../../api/apiClient"
+import { authService } from "@/api/services"
 
 const loginSchema = z.object({
   username: z.string().email({message: "Please enter a valid email address" }),
@@ -50,9 +50,6 @@ export default function AuthPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('');
-  // const apiClient = axios.create({
-  //   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  // });
   
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -74,49 +71,63 @@ export default function AuthPage() {
     },
   })
 
-  // function onLoginSubmit(values: z.infer<typeof loginSchema>) {
-  //   setIsLoading(true)
-  //   console.log(values)
-  //   // Simulate API call
-  //   setTimeout(() => {
-  //     setIsLoading(false)
-  //     router.push("/profile/")
-  //   }, 1500)
-  // }
-
   async function onLoginSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/token', values, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        transformRequest: [(data) => {
-          const params = new URLSearchParams();
-          params.append('grant_type', 'password');
-          params.append('username', data.username);
-          params.append('password', data.password);
-          return params.toString();
-        }],
+      const response = await authService.login({
+        username: values.username,
+        password: values.password
       });
+      
       // Store the JWT token in localStorage
       localStorage.setItem('token', response.data.access_token);
+      // Store username for later use
+      localStorage.setItem('username', values.username);
       // Redirect to the dashboard
-      router.push('/dashboard');
+      router.push('/profile/setup');
     } catch (error) {
       setError('Invalid email or password');
+    } finally {
       setIsLoading(false);
     }
   }
 
-  function onSignupSubmit(values: z.infer<typeof signupSchema>) {
-    setIsLoading(true)
-    console.log(values)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push("/profile/setup")
-    }, 1500)
+  async function onSignupSubmit(values: z.infer<typeof signupSchema>) {
+    setIsLoading(true);
+    setError('');
+    try {
+      // Register the user
+      await authService.register({
+        username: values.email,
+        email: values.email,
+        password: values.password
+      });
+      
+      // Automatically login after successful registration
+      const loginResponse = await authService.login({
+        username: values.email,
+        password: values.password
+      });
+
+      localStorage.setItem('token', loginResponse.data.access_token);
+      localStorage.setItem('username', values.email);
+      router.push('/profile/setup');
+    } catch (error) {
+      console.error('Registration error:', error);
+      const axiosError = error as AxiosError;
+      if (axiosError.response?.data?.detail) {
+        // Show the specific error message from the backend
+        setError(axiosError.response.data.detail as string);
+      } else if (axiosError.response?.status === 400) {
+        setError('Invalid registration data. Please check your input.');
+      } else if (axiosError.response?.status === 409) {
+        setError('Email or username already exists. Please try a different one.');
+      } else {
+        setError('Registration failed. Please try again later.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
