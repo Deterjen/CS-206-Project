@@ -5,3 +5,5 @@ gateway/venv
 gateway/supabase
 gateway/node_modules
 gateway/.env.local
+gateway/__pycache__
+gateway/services/__pycache__
