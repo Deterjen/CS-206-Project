@@ -6,43 +6,14 @@ import { Button } from "@/components/ui/button";
 export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen snap-y snap-proximity overflow-y-scroll h-screen">
-      {/* Navigation */}
-      <header className="border-b w-full sticky top-0 bg-background/95 z-10">
-        <div className="container mx-auto flex h-16 items-center justify-between px-8">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-6 w-6" />
-            <span className="text-xl font-bold">Unify</span>
-          </div>
-          <nav className="hidden md:flex gap-6 pl-22">
-            <Link href="#features" className="text-sm font-medium hover:underline">
-              Features
-            </Link>
-            <Link href="#how-it-works" className="text-sm font-medium hover:underline">
-              How It Works
-            </Link>
-            <Link href="#testimonials" className="text-sm font-medium hover:underline">
-              Testimonials
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link href="/profile/setup">
-              <Button variant="outline">Sign Up</Button>
-            </Link>
-            <Link href="/auth">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
-      <section className="py-20 md:py-28 min-h-screen w-full">
+      <section className="flex-1 flex items-center justify-center py-20 min-h-screen">
         <div className="container mx-auto flex flex-col items-center text-center">
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-3xl">
             Find Your Perfect University Match
           </h1>
           <p className="mt-6 text-xl text-muted-foreground max-w-2xl">
-            Personalized university recommendations based on your academic profile, preferences, and goals. Take the
+            University recommendations based on your academic profile, preferences, and goals. Take the
             guesswork out of college applications.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-4">
@@ -90,7 +61,7 @@ export default function LandingPage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Detailed Insights</h3>
               <p className="text-muted-foreground">
-                Get personalized insights on why each university is a good match, including benefits and potential drawbacks.
+                Get insights on why each university is a good match, including benefits and potential drawbacks.
               </p>
             </div>
           </div>
@@ -141,7 +112,7 @@ export default function LandingPage() {
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Get Recommendations</h3>
                   <p className="text-muted-foreground">
-                    Receive personalized university recommendations based on your profile.
+                    Receive university recommendations based on your profile.
                   </p>
                 </div>
               </div>
@@ -221,7 +192,7 @@ export default function LandingPage() {
                 name: "Michael Rodriguez",
                 role: "Engineering Student",
                 quote:
-                  "I was overwhelmed by all the university options until I used Unify. The personalized recommendations made the process so much easier.",
+                  "I was overwhelmed by all the university options until I used Unify. The recommendations made the process so much easier.",
               },
             ].map((testimonial, i) => (
               <div key={i} className="bg-background p-6 rounded-lg shadow-sm">
@@ -261,7 +232,7 @@ export default function LandingPage() {
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Perfect University?</h2>
           <p className="text-xl mb-10 max-w-2xl mx-auto opacity-90">
-            Create your profile today and get personalized university recommendations.
+            Create your profile today and get university recommendations.
           </p>
           <Link href="/auth">
             <Button size="lg" variant="secondary" className="px-8">
