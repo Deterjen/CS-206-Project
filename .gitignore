@@ -66,3 +66,5 @@ supabase/.env
 .Trashes
 ehthumbs.db
 Thumbs.db
+*__pycache__/
+*/venv/
