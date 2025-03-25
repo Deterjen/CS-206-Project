@@ -7,7 +7,6 @@ export function Footer() {
       <div className="container mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 place-items-center">
           <div className="text-center">
-            <h3 className="font-semibold mb-4">Unify</h3>
             <div className="flex items-center gap-2 mb-4 justify-center">
               <GraduationCap className="h-5 w-5" />
               <span className="font-medium">Unify</span>

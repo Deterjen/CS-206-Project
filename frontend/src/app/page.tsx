@@ -20,11 +20,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LandingPage() {
   return (
-    <div className="h-screen overflow-y-auto snap-y snap-mandatory">
+    <div>
       {/* Hero Section */}
-      <section className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden">
+      <section className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50">
         <div className="container mx-auto px-4 py-8 flex flex-col items-center text-center">
-
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full mb-6 text-sm font-medium">
             <BadgeCheck className="h-4 w-4" />
             Simplify Your Search, Amplify Your Future!
@@ -60,9 +59,9 @@ export default function LandingPage() {
       {/* Problem Statement Section */}
       <section
         id="problem"
-        className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden"
+        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
       >
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-32 py-8">
           <div className="flex flex-col lg:flex-row gap-12 items-center">
             <div className="lg:w-1/2">
               <h2 className="text-3xl md:text-4xl font-bold mb-6">
@@ -135,9 +134,9 @@ export default function LandingPage() {
       {/* Multi-dimensional Analysis */}
       <section
         id="features"
-        className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden"
+        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
       >
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-32 py-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Find Your Perfect Match Across{" "}
@@ -274,9 +273,9 @@ export default function LandingPage() {
       {/* How It Works */}
       <section
         id="how-it-works"
-        className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden"
+        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
       >
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-32 py-32">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
             How <span className="text-primary">Unify</span> Works
           </h2>
@@ -402,9 +401,84 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Data-driven approach */}
+      <section className="min-h-screen flex flex-col justify-center w-full bg-muted/50">
+        <div className="container mx-auto px-32 py-8">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                Our <span className="text-primary">Data-Driven</span> Approach
+              </h2>
+              <p className="text-muted-foreground mb-8">
+                We&apos;ve gathered detailed profiles from thousands of
+                university students to create a comprehensive database that
+                powers our smart matching algorithm.
+              </p>
+
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Real Student Experiences
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Our database includes profiles from real students across
+                      hundreds of universities, giving you authentic insights.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <Search className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Multi-dimensional Analysis
+                    </h3>
+                    <p className="text-muted-foreground">
+                      We analyze compatibility across 8 key dimensions to find
+                      your best university matches.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <BarChart className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Transparent Scoring
+                    </h3>
+                    <p className="text-muted-foreground">
+                      We show you exactly why each university is recommended,
+                      with detailed breakdown of your match score.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Image
+                src="/placeholder.svg?height=500&width=600"
+                alt="Data visualization of university matching"
+                width={600}
+                height={500}
+                className="rounded-lg shadow-lg border border-border"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* University Showcase */}
-      <section className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden">
-        <div className="container mx-auto px-4 py-8">
+      <section className="min-h-screen flex flex-col justify-center w-full bg-muted/50">
+        <div className="container mx-auto px-32 py-8">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
             Discover Universities That{" "}
             <span className="text-primary">Match Your Profile</span>
@@ -540,9 +614,9 @@ export default function LandingPage() {
       {/* Testimonials */}
       <section
         id="testimonials"
-        className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden"
+        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
       >
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-32 py-8">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
             From Confusion to <span className="text-primary">Clarity</span>
           </h2>
@@ -619,83 +693,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Data-driven approach */}
-      <section className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50 snap-start overflow-y-hidden">
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                Our <span className="text-primary">Data-Driven</span> Approach
-              </h2>
-              <p className="text-muted-foreground mb-8">
-                We&apos;ve gathered detailed profiles from thousands of
-                university students to create a comprehensive database that
-                powers our smart matching algorithm.
-              </p>
-
-              <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <Users className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2">
-                      Real Student Experiences
-                    </h3>
-                    <p className="text-muted-foreground">
-                      Our database includes profiles from real students across
-                      hundreds of universities, giving you authentic insights.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <Search className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2">
-                      Multi-dimensional Analysis
-                    </h3>
-                    <p className="text-muted-foreground">
-                      We analyze compatibility across 8 key dimensions to find
-                      your best university matches.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <BarChart className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2">
-                      Transparent Scoring
-                    </h3>
-                    <p className="text-muted-foreground">
-                      We show you exactly why each university is recommended,
-                      with detailed breakdown of your match score.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Image
-                src="/placeholder.svg?height=500&width=600"
-                alt="Data visualization of university matching"
-                width={600}
-                height={500}
-                className="rounded-lg shadow-lg border border-border"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
-      <section className="py-20 bg-primary text-primary-foreground w-full snap-center">
+      <section className="py-20 bg-primary text-primary-foreground w-full">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-5xl font-bold mb-6">
             Ready to Find Your Perfect University Match?
