@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import MatchingAlgorithmVisualization from "@/components/matching-algo-vis";
 
 export default function LandingPage() {
   return (
@@ -120,7 +121,7 @@ export default function LandingPage() {
             </div>
             <div className="lg:w-1/2">
               <Image
-                src="/placeholder.svg?height=500&width=600"
+                src="/images/overwhelmed_student.webp"
                 alt="Students overwhelmed by university choices"
                 width={600}
                 height={500}
@@ -464,13 +465,7 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <Image
-                src="/placeholder.svg?height=500&width=600"
-                alt="Data visualization of university matching"
-                width={600}
-                height={500}
-                className="rounded-lg shadow-lg border border-border"
-              />
+              <MatchingAlgorithmVisualization />
             </div>
           </div>
         </div>
