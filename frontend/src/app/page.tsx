@@ -6,35 +6,6 @@ import { Button } from "@/components/ui/button";
 export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen snap-y snap-proximity overflow-y-scroll h-screen">
-      {/* Navigation */}
-      <header className="border-b w-full sticky top-0 bg-background/95 z-10">
-        <div className="container mx-auto flex h-16 items-center justify-between px-8">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-6 w-6" />
-            <span className="text-xl font-bold">Unify</span>
-          </div>
-          <nav className="hidden md:flex gap-6 pl-22">
-            <Link href="#features" className="text-sm font-medium hover:underline">
-              Features
-            </Link>
-            <Link href="#how-it-works" className="text-sm font-medium hover:underline">
-              How It Works
-            </Link>
-            <Link href="#testimonials" className="text-sm font-medium hover:underline">
-              Testimonials
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link href="/profile/setup">
-              <Button variant="outline">Sign Up</Button>
-            </Link>
-            <Link href="/auth">
-              <Button>Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="py-20 md:py-28 min-h-screen w-full">
         <div className="container mx-auto flex flex-col items-center text-center">
@@ -242,7 +213,7 @@ export default function LandingPage() {
                     </svg>
                   ))}
                 </div>
-                <p className="text-muted-foreground mb-4">"{testimonial.quote}"</p>
+                <p className="text-muted-foreground mb-4">&quot;{testimonial.quote}&quot;</p>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-muted"></div>
                   <div>

@@ -49,28 +49,6 @@ export default function ProfileSetup() {
 
   return (
     <div className="container flex h-screen min-w-screen flex-col gap-y-6">
-      {/* Navigation */}
-        <header className="border-b sticky top-0 bg-background/95 z-10">
-          <div className="container flex h-16 items-center justify-between pl-8 pr-4">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-6 w-6" />
-              <Link href="/">
-                <span className="text-xl font-bold">Unify</span>
-              </Link>
-            </div>
-            <nav className="hidden md:flex items-center gap-x-8 pl-20 mr-10">
-              <Link href="/#features" className="text-sm font-medium hover:underline">
-                Features
-              </Link>
-              <Link href="/#how-it-works" className="text-sm font-medium hover:underline">
-                How It Works
-              </Link>
-              <Link href="/#testimonials" className="text-sm font-medium hover:underline">
-                Testimonials
-              </Link>
-            </nav>
-          </div>
-        </header>
       <div className="flex items-center justify-center">
         <Card>
           <CardHeader>
