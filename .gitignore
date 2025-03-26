@@ -8,3 +8,4 @@ gateway/.env.local
 gateway/__pycache__
 gateway/services/__pycache__
 gateway/data/__pycache__/
+*/venv
