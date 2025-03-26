@@ -248,8 +248,21 @@ async def get_recommendation_justification(
         if username != current_user["username"]:
             raise HTTPException(status_code=403, detail="You can only get justification for your own recommendations")
 
+        # First, check if a justification already exists in the database
+        existing_justification = supabase_client.get_recommendation_justification(recommendation_id)
+        
+        # If a justification exists, return it
+        if existing_justification:
+            logging.info(f"Retrieved existing justification for recommendation {recommendation_id}")
+            return existing_justification
+        
+        logging.info(f"No existing justification found for recommendation {recommendation_id}, generating new one")
+        
+        # If no justification exists, generate it
         # Get recommendation details
         recommendation_details = recommendation_service.get_recommendation_details(recommendation_id)
+        if not recommendation_details:
+            raise HTTPException(status_code=404, detail=f"Recommendation with ID {recommendation_id} not found")
 
         # Get aspiring student profile
         aspiring_student_profile = await recommendation_service.get_aspiring_student_profile(username)
@@ -264,6 +277,14 @@ async def get_recommendation_justification(
             similar_students={"students": similar_students}
         )
 
+        # Save the justification to the database
+        saved_justification = supabase_client.save_recommendation_justification(recommendation_id, justification)
+        if saved_justification:
+            logging.info(f"Successfully saved justification for recommendation {recommendation_id}")
+        else:
+            logging.warning(f"Failed to save justification for recommendation {recommendation_id}")
+
         return justification
     except Exception as e:
+        logging.error(f"Error processing recommendation justification: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

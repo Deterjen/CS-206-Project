@@ -276,7 +276,27 @@ CREATE TABLE recommendation_feedback
     created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- No need to modify existing tables as they already capture all required fields from questionnaires
+-- Store LLM-generated justifications for recommendations
+CREATE TABLE recommendation_justifications
+(
+    id                SERIAL PRIMARY KEY,
+    recommendation_id INTEGER REFERENCES recommendations (id) UNIQUE,  -- One justification per recommendation
+    pros              TEXT[],  -- Array of pros/benefits
+    cons              TEXT[],  -- Array of cons/drawbacks
+    conclusion        TEXT,    -- Overall conclusion/summary
+    created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add index for faster lookups
+CREATE INDEX idx_recommendation_justifications_recommendation_id ON recommendation_justifications (recommendation_id);
+
+-- Add cascade deletion if you want justifications deleted when recommendations are deleted
+ALTER TABLE recommendation_justifications
+    DROP CONSTRAINT recommendation_justifications_recommendation_id_fkey,
+    ADD CONSTRAINT recommendation_justifications_recommendation_id_fkey
+        FOREIGN KEY (recommendation_id)
+        REFERENCES recommendations(id)
+        ON DELETE CASCADE;
 
 -- Add additional index to improve recommendation queries performance
 CREATE INDEX idx_recommendations_aspiring_student_id ON recommendations (aspiring_student_id);

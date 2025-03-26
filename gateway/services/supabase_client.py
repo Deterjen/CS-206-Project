@@ -1097,3 +1097,82 @@ class SupabaseDB:
                 complete_students.append(student)
 
         return complete_students
+
+    def save_recommendation_justification(self, recommendation_id: int, justification_data: Dict[str, Any]) -> Dict[
+        str, Any]:
+        """
+        Save a recommendation justification to the database.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+            justification_data: Dictionary containing pros, cons, and conclusion
+
+        Returns:
+            Created justification record
+        """
+        # Handle potential different formats for pros
+        pros = justification_data.get("Pros", [])
+        if not isinstance(pros, list):
+            pros = [pros] if pros else []
+
+        # Handle potential different formats for cons
+        cons = justification_data.get("Cons", [])
+        if not isinstance(cons, list):
+            cons = [cons] if cons else []
+
+        # Handle potential different formats for conclusion
+        conclusion = justification_data.get("Conclusion", "")
+        if isinstance(conclusion, list):
+            conclusion = conclusion[0] if conclusion else ""
+
+        data = {
+            "recommendation_id": recommendation_id,
+            "pros": pros,
+            "cons": cons,
+            "conclusion": conclusion
+        }
+
+        try:
+            # Check if justification already exists
+            existing = self.get_recommendation_justification(recommendation_id)
+            if existing:
+                # Update existing justification
+                response = self.supabase.table("recommendation_justifications").update(data).eq("recommendation_id",
+                                                                                                recommendation_id).execute()
+            else:
+                # Insert new justification
+                response = self.supabase.table("recommendation_justifications").insert(data).execute()
+
+            return response.data[0] if response.data else None
+        except Exception as e:
+            print(f"Error saving recommendation justification: {e}")
+            return None
+
+    def get_recommendation_justification(self, recommendation_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a recommendation justification from the database.
+        
+        Args:
+            recommendation_id: The ID of the recommendation
+        
+        Returns:
+            Justification record or None if not found
+        """
+        try:
+            response = self.supabase.table("recommendation_justifications").select("*").eq("recommendation_id",
+                                                                                           recommendation_id).limit(
+                1).execute()
+
+            if response.data:
+                justification = response.data[0]
+                # Format it to match the structure expected by the frontend
+                return {
+                    "Pros": justification.get("pros", []),
+                    "Cons": justification.get("cons", []),
+                    "Conclusion": justification.get("conclusion", "")
+                }
+
+            return None
+        except Exception as e:
+            print(f"Error retrieving recommendation justification: {e}")
+            return None
