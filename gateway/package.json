@@ -1,8 +1,0 @@
-{
-  "devDependencies": {
-    "supabase": "^2.19.7"
-  },
-  "dependencies": {
-    "lucide-react": "^0.483.0"
-  }
-}
