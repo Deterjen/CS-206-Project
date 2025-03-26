@@ -1,8 +1,9 @@
-import os
 from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
+
+from config import SUPABASE_URL, SUPABASE_KEY
 
 load_dotenv('.env.local')
 
@@ -34,13 +35,10 @@ class SupabaseDB:
         Returns:
             SupabaseDB: An initialized SupabaseDB instance
         """
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-
-        if not url or not key:
+        if not SUPABASE_URL or not SUPABASE_KEY:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 
-        return cls(url, key)
+        return cls(SUPABASE_URL, SUPABASE_KEY)
 
     # ===== Account Oppertaions =====
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:

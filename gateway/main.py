@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 
 from auth import authenticate, create_token, get_current_active_user
+from config import ALLOWED_ORIGINS, JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT
 from models import Token, User, RecommendationRequest
 from services.llm_justification import JustificationGenerator
 from services.recommendation_service import UniversityRecommendationService
@@ -29,7 +30,7 @@ app = FastAPI()
 # Allow frontend requests from localhost:3000
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,7 +47,7 @@ recommendation_service.initialize_recommender()
 logger.info("Recommender initialized.")
 
 # Initialize the recommender with data
-justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
+justificationGenerator = JustificationGenerator(JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT)
 logger.info("JustificationGenerator initialized.")
 
 
@@ -71,7 +72,7 @@ async def shutdown_event():
     logger.info("Heartbeat manager stopped")
 
 
-@app.get("/heartbeat")
+@app.get("/health")
 async def heartbeat_endpoint():
     """
     Lightweight endpoint that returns basic status information

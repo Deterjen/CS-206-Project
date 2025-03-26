@@ -77,7 +77,7 @@ class HeartbeatService:
             port = os.environ.get('PORT', '8000')
             base_url = f"http://localhost:{port}"
 
-        return f"{base_url.rstrip('/')}/heartbeat"
+        return f"{base_url.rstrip('/')}/health"
 
     async def _perform_heartbeat(self):
         """Perform a single heartbeat ping with minimal operations."""

@@ -1,26 +1,17 @@
-import os
+from datetime import datetime
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
-from models import User
-from utils import verify_password
-from dotenv import load_dotenv
-from datetime import datetime
+
+from config import SECRET_KEY, ALGORITHM
 from services.supabase_client import SupabaseDB
-
-load_dotenv()
-
-# Load Supabase URL and Key from environment variables
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
+from utils import verify_password
 
 # Initialize the Supabase client with the necessary parameters
-supabase_client = SupabaseDB(url=supabase_url, key=supabase_key)
-
+supabase_client = SupabaseDB.from_env()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
 
 async def authenticate(username: str, password: str):
     """Validate user credentials from Supabase."""
@@ -31,6 +22,7 @@ async def authenticate(username: str, password: str):
             detail="Invalid username or password"
         )
     return user
+
 
 async def get_current_active_user(token: str = Depends(oauth2_scheme)):
     """Decode JWT and fetch the user from Supabase."""
@@ -48,6 +40,7 @@ async def get_current_active_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
     return user
+
 
 def create_token(data: dict, expires_delta):
     """Generate JWT token for authentication."""
