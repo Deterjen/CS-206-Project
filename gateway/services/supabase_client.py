@@ -801,8 +801,7 @@ class SupabaseDB:
 
     def get_all_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
-        Get all recommendations for an aspiring student with university and similar student details
-        in a minimal number of queries.
+        Get all recommendations for an aspiring student with focused similar student details.
 
         Args:
             aspiring_student_id: The ID of the aspiring student
@@ -832,19 +831,58 @@ class SupabaseDB:
 
         universities = {u["id"]: u for u in univ_response.data}
 
-        # Get all similar students in a single query
-        similar_students_response = self.supabase.table("similar_students") \
+        # Get all similar students for these recommendations
+        ss_response = self.supabase.table("similar_students") \
             .select("*") \
             .in_("recommendation_id", recommendation_ids) \
             .execute()
 
+        # Get all student IDs from similar students
+        all_student_ids = [ss["existing_student_id"] for ss in ss_response.data]
+
+        # Get only the required student data from the complete view
+        student_data = {}
+        if all_student_ids:
+            student_data_response = self.supabase.table("existing_students_complete_view") \
+                .select("id, university_id, program_id, year_of_study, learning_styles, academic_credentials, " +
+                        "campus_culture, extracurricular_activities, typical_student_traits, " +
+                        "important_decision_factors, retrospective_important_factors, " +
+                        "university_strengths, university_weaknesses") \
+                .in_("id", all_student_ids) \
+                .execute()
+
+            student_data = {s["id"]: s for s in student_data_response.data}
+
+        # Get program names for students
+        if student_data:
+            student_program_ids = list(set([s["program_id"] for s in student_data.values() if s.get("program_id")]))
+
+            # Get program names
+            program_names = {}
+            if student_program_ids:
+                prog_response = self.supabase.table("programs").select("id, name").in_("id",
+                                                                                       student_program_ids).execute()
+                program_names = {p["id"]: p["name"] for p in prog_response.data}
+
+            # Add program names to student data
+            for student_id, data in student_data.items():
+                prog_id = data.get("program_id")
+                data["program_name"] = program_names.get(prog_id, "Unknown Program") if prog_id else "Unknown Program"
+
         # Organize similar students by recommendation ID
         similar_students_by_rec = {}
-        for ss in similar_students_response.data:
+        for ss in ss_response.data:
             rec_id = ss["recommendation_id"]
+            student_id = ss["existing_student_id"]
+
+            # Combine similarity scores with student data
+            student_details = student_data.get(student_id, {})
+            complete_student_data = {**ss, **student_details}
+
             if rec_id not in similar_students_by_rec:
                 similar_students_by_rec[rec_id] = []
-            similar_students_by_rec[rec_id].append(ss)
+
+            similar_students_by_rec[rec_id].append(complete_student_data)
 
         # Build the complete recommendation data
         detailed_recommendations = []
@@ -933,15 +971,52 @@ class SupabaseDB:
         # Get the university (use cache if available)
         university = self.get_university_by_id(university_id)
 
-        # Get similar students
+        # Step 1: Get similar students for this recommendation
         ss_response = self.supabase.table("similar_students") \
             .select("*") \
             .eq("recommendation_id", recommendation_id) \
             .execute()
 
-        similar_students = ss_response.data
+        similar_students = []
+        if ss_response.data:
+            # Step 2: Get existing student IDs
+            student_ids = [ss["existing_student_id"] for ss in ss_response.data]
 
-        # Combine all data
+            # Step 3: Get only the required student data from the complete view
+            student_data_response = self.supabase.table("existing_students_complete_view") \
+                .select("id, university_id, program_id, year_of_study, learning_styles, academic_credentials, " +
+                        "campus_culture, extracurricular_activities, typical_student_traits, " +
+                        "important_decision_factors, retrospective_important_factors, " +
+                        "university_strengths, university_weaknesses") \
+                .in_("id", student_ids) \
+                .execute()
+
+            # Create a lookup for student data
+            student_data_map = {s["id"]: s for s in student_data_response.data}
+
+            # Step 4: Get program names for each student
+            program_ids = list(set([s["program_id"] for s in student_data_response.data if s.get("program_id")]))
+
+            program_names = {}
+            if program_ids:
+                prog_response = self.supabase.table("programs").select("id, name").in_("id", program_ids).execute()
+                program_names = {p["id"]: p["name"] for p in prog_response.data}
+
+            # Step 5: Combine all data
+            for ss in ss_response.data:
+                student_id = ss["existing_student_id"]
+                student_data = student_data_map.get(student_id, {})
+
+                # Add program name
+                prog_id = student_data.get("program_id")
+                student_data["program_name"] = program_names.get(prog_id,
+                                                                 "Unknown Program") if prog_id else "Unknown Program"
+
+                # Combine similarity scores with student data
+                similar_student = {**ss, **student_data}
+                similar_students.append(similar_student)
+
+        # Return combined data
         result = {
             "recommendation": recommendation,
             "university": university,
