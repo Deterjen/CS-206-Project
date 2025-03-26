@@ -5,6 +5,8 @@ import time
 
 import aiohttp
 
+from config import HEARTBEAT_INTERVAL, ENABLE_HEARTBEAT, HEARTBEAT_URL
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,10 +22,10 @@ class HeartbeatService:
         self.task = None
 
         # Get configuration from environment variables
-        self.interval = int(os.environ.get('HEARTBEAT_INTERVAL', 600))  # Default: 10 minutes
+        self.interval = HEARTBEAT_INTERVAL  # Default: 10 minutes
 
         # Only track statistics if explicitly enabled
-        self.stats_enabled = os.environ.get('HEARTBEAT_STATS_ENABLED', '').lower() in ('true', '1', 'yes')
+        self.stats_enabled = ENABLE_HEARTBEAT
         if self.stats_enabled:
             self.start_time = time.time()
             self.ping_count = 0
@@ -69,15 +71,7 @@ class HeartbeatService:
 
     def _get_app_url(self):
         """Determine the application URL for self-pinging."""
-        # Try to get the Render service URL from environment
-        base_url = os.environ.get('RENDER_EXTERNAL_URL')
-
-        # If not available, fallback to localhost with port
-        if not base_url:
-            port = os.environ.get('PORT', '8000')
-            base_url = f"http://localhost:{port}"
-
-        return f"{base_url.rstrip('/')}/health"
+        return f"{HEARTBEAT_URL.rstrip('/')}/health"
 
     async def _perform_heartbeat(self):
         """Perform a single heartbeat ping with minimal operations."""

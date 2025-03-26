@@ -2,6 +2,7 @@ services:
   - name: university-recommender-api
     type: web
     plan: starter
+    region: singapore
     buildCommand: pip install -r gateway/requirements.txt
     startCommand: cd gateway && uvicorn main:app --host 0.0.0.0 --port $PORT
     runtime: python

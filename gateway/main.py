@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 
 from auth import authenticate, create_token, get_current_active_user
-from config import ALLOWED_ORIGINS, JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT
+from config import ALLOWED_ORIGINS, JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT, ENVIRONMENT
 from models import Token, User, RecommendationRequest
 from services.llm_justification import JustificationGenerator
 from services.recommendation_service import UniversityRecommendationService
@@ -82,7 +82,7 @@ async def heartbeat_endpoint():
         "status": "healthy",
         "service": "University Recommender API",
         "timestamp": time.time(),
-        "environment": os.environ.get("ENVIRONMENT", "production")
+        "environment": ENVIRONMENT
     }
 
 

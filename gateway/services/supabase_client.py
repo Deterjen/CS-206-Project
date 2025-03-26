@@ -1,11 +1,8 @@
 from typing import List, Dict, Any, Optional
 
-from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from config import SUPABASE_URL, SUPABASE_KEY
-
-load_dotenv('.env.local')
 
 
 class SupabaseDB:
