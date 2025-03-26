@@ -1,8 +1,11 @@
+import logging
 import os
 from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Try to load .env file if it exists (for local development)
 env_path = Path('.env')
