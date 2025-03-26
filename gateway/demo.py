@@ -16,12 +16,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Load environment variables
 load_dotenv('../gateway/.env.local')
 
-# Log the loaded environment variables
-logging.debug(f"SUPABASE_URL: {os.getenv('SUPABASE_URL')}")
-logging.debug(f"SUPABASE_KEY: {os.getenv('SUPABASE_KEY')}")
-logging.debug(f"JAMAIBASE_PAT:{os.getenv('JAMAIBASE_PAT')}")
-logging.debug(f"JAMAIBASE_PROJECT_ID:{os.getenv('JAMAIBASE_PROJECT_ID')}")
-
 
 async def main():
     # Initialize the service

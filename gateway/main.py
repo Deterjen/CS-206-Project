@@ -1,48 +1,88 @@
 import logging
-import os
+import time
 from datetime import timedelta
 from typing import Dict
 
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 
 from auth import authenticate, create_token, get_current_active_user
-# from database import update_user, delete_user
+from config import ALLOWED_ORIGINS, JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT, ENVIRONMENT
 from models import Token, User, RecommendationRequest
 from services.llm_justification import JustificationGenerator
-# Import your service and dependencies
 from services.recommendation_service import UniversityRecommendationService
-from services.supabase_client import SupabaseDB  # Make sure this import is correct
+from services.supabase_client import SupabaseDB
+from services.utils.heartbeat_service import heartbeat_service
 from utils import get_hashed_password
-from fastapi.middleware.cors import CORSMiddleware
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 # Allow frontend requests from localhost:3000
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allows only frontend requests
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize the Supabase client with the necessary parameters
 supabase_client = SupabaseDB.from_env()
 
-logging.info("Initializing UniversityRecommendationService.")
 recommendation_service = UniversityRecommendationService(supabase_client)
-logging.info("UniversityRecommendationService initialized.")
+logger.info("UniversityRecommendationService initialized.")
 
 # Initialize the recommender with data
-logging.info("Initializing recommender with data.")
 recommendation_service.initialize_recommender()
-logging.info("Recommender initialized.")
+logger.info("Recommender initialized.")
 
 # Initialize the recommender with data
-logging.info("Initializing JustificationGenerator.")
-justificationGenerator = JustificationGenerator(os.getenv('JAMAIBASE_PROJECT_ID'), os.getenv('JAMAIBASE_PAT'))
-logging.info("JustificationGenerator initialized.")
+justificationGenerator = JustificationGenerator(JAMAIBASE_PROJECT_ID, JAMAIBASE_PAT)
+logger.info("JustificationGenerator initialized.")
+
+
+# Add this at the end of your main.py file, after all routes are defined
+@app.on_event("startup")
+async def startup_event():
+    """Runs when the FastAPI application starts up."""
+    logger.info("Starting up University Recommender API")
+
+    # Start the heartbeat manager
+    await heartbeat_service.start()
+    logger.info("Self-pinging heartbeat manager started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Runs when the FastAPI application is shutting down."""
+    logger.info("Shutting down University Recommender API")
+
+    # Stop the heartbeat manager
+    await heartbeat_service.stop()
+    logger.info("Heartbeat manager stopped")
+
+
+@app.get("/health")
+async def heartbeat_endpoint():
+    """
+    Lightweight endpoint that returns basic status information
+    while maintaining minimal performance impact.
+    """
+    return {
+        "status": "healthy",
+        "service": "University Recommender API",
+        "timestamp": time.time(),
+        "environment": ENVIRONMENT
+    }
 
 
 # Login route
@@ -248,8 +288,21 @@ async def get_recommendation_justification(
         if username != current_user["username"]:
             raise HTTPException(status_code=403, detail="You can only get justification for your own recommendations")
 
+        # First, check if a justification already exists in the database
+        existing_justification = supabase_client.get_recommendation_justification(recommendation_id)
+
+        # If a justification exists, return it
+        if existing_justification:
+            logger.info(f"Retrieved existing justification for recommendation {recommendation_id}")
+            return existing_justification
+
+        logger.info(f"No existing justification found for recommendation {recommendation_id}, generating new one")
+
+        # If no justification exists, generate it
         # Get recommendation details
         recommendation_details = recommendation_service.get_recommendation_details(recommendation_id)
+        if not recommendation_details:
+            raise HTTPException(status_code=404, detail=f"Recommendation with ID {recommendation_id} not found")
 
         # Get aspiring student profile
         aspiring_student_profile = await recommendation_service.get_aspiring_student_profile(username)
@@ -264,6 +317,14 @@ async def get_recommendation_justification(
             similar_students={"students": similar_students}
         )
 
+        # Save the justification to the database
+        saved_justification = supabase_client.save_recommendation_justification(recommendation_id, justification)
+        if saved_justification:
+            logger.info(f"Successfully saved justification for recommendation {recommendation_id}")
+        else:
+            logger.warning(f"Failed to save justification for recommendation {recommendation_id}")
+
         return justification
     except Exception as e:
+        logger.error(f"Error processing recommendation justification: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
