@@ -93,7 +93,6 @@ requests==2.32.3
 rsa==4.9
 safetensors==0.5.3
 scikit-learn==1.6.1
-scikit-surprise==1.1.4
 scipy==1.15.2
 seaborn==0.13.2
 sentence-transformers==3.4.1
