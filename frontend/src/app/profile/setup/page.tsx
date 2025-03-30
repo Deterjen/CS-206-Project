@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthContext } from "@/providers/AuthProvider";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { saveQuestionnaire, type RecommendationRequest } from "@/api/apiClient";
 
 // Import each step's form and types
 import Step1Form, { Step1Data } from "./Step1Form";
@@ -19,9 +18,18 @@ import Step8Form, { Step8Data } from "./Step8Form";
 
 export default function ProfileSetupPage() {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuthContext();
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/auth");
+    }
+  }, [user, authLoading, router]);
 
   // Track which step user is on
   const [currentStep, setCurrentStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Store partial data from each step
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
@@ -33,225 +41,297 @@ export default function ProfileSetupPage() {
   const [step7Data, setStep7Data] = useState<Step7Data | null>(null);
   const [step8Data, setStep8Data] = useState<Step8Data | null>(null);
 
-  // Load saved data when component mounts
+  // Load existing profile data if available
   useEffect(() => {
-    const savedData = localStorage.getItem("profileData");
-    if (savedData) {
-      const data = JSON.parse(savedData) as RecommendationRequest;
+    if (!authLoading && user?.username) {
+      // Check for user-specific profile data
+      const userProfileKey = `profileData_${user.username}`;
+      const savedData = localStorage.getItem(userProfileKey);
       
-      // Distribute data to appropriate step states
-      setStep1Data({
-        preferredFields: data.preferred_fields,
-        learningStyle: data.learning_style,
-        careerGoals: data.career_goals[0] || "", // Take first item since form expects string
-        furtherEducation: data.further_education,
-      });
-
-      setStep2Data({
-        cultureImportance: data.culture_importance,
-        extracurriculars: data.interested_activities,
-        weeklyHours: data.weekly_extracurricular_hours.toString(),
-        passionateActivities: data.passionate_activities.join(", "), // Join array to string for form
-      });
-
-      setStep3Data({
-        internshipImportance: data.internship_importance,
-        leadershipInterest: data.leadership_interest ? "yes" : "no",
-        alumniNetworkValue: data.alumni_network_value,
-      });
-
-      setStep4Data({
-        affordabilityImportance: data.affordability_importance,
-        yearlyBudget: data.yearly_budget.toString(),
-        financialAidInterest: data.financial_aid_interest ? "yes" : "no",
-      });
-
-      setStep5Data({
-        preferredRegion: data.preferred_region,
-        preferredSetting: data.preferred_setting,
-        preferredLivingArrangement: data.preferred_living_arrangement,
-      });
-
-      setStep6Data({
-        importantFacilities: data.important_facilities,
-        modernAmenitiesImportance: data.modern_amenities_importance,
-      });
-
-      setStep7Data({
-        rankingImportance: data.ranking_importance,
-        alumniTestimonialInfluence: data.alumni_testimonial_influence,
-        selectionFactors: data.important_selection_factors,
-      });
-
-      setStep8Data({
-        personalityTraits: data.personality_traits,
-        studentPopulationSize: data.preferred_student_population,
-        lifestylePreferences: data.lifestyle_preferences,
-      });
+      if (savedData) {
+        try {
+          const data = JSON.parse(savedData);
+          // Carefully load each step data
+          if (data.step1) setStep1Data(data.step1);
+          if (data.step2) setStep2Data(data.step2);
+          if (data.step3) setStep3Data(data.step3);
+          if (data.step4) setStep4Data(data.step4);
+          if (data.step5) setStep5Data(data.step5);
+          if (data.step6) setStep6Data(data.step6);
+          if (data.step7) setStep7Data(data.step7);
+          if (data.step8) setStep8Data(data.step8);
+          
+          console.log("Loaded profile data for:", user.username);
+        } catch (error) {
+          console.error("Error loading profile data:", error);
+        }
+      }
+      setIsLoading(false);
     }
-  }, []);
+  }, [user?.username, authLoading]);
 
   // Once final step is done, combine everything and submit
-  async function handleFinalSubmit() {
-    try {
-      // Get the username from localStorage or your auth context
-      const username = localStorage.getItem("username");
-      if (!username) {
-        throw new Error("User not authenticated");
-      }
-
-      // Combine all step data into the format expected by the API
-      const finalData: RecommendationRequest = {
-        algorithm: "hybrid", // Optional, defaults to "hybrid"
-        num_results: 5, // Optional, defaults to 5
-        preferred_fields: step1Data?.preferredFields || [],
-        learning_style: step1Data?.learningStyle || "",
-        career_goals: step1Data?.careerGoals ? [step1Data.careerGoals] : [],
-        further_education: step1Data?.furtherEducation || "",
-        culture_importance: step2Data?.cultureImportance || 5,
-        interested_activities: step2Data?.extracurriculars || [],
-        weekly_extracurricular_hours: parseInt(step2Data?.weeklyHours || "0"),
-        passionate_activities: step2Data?.passionateActivities ? step2Data.passionateActivities.split(',').map(item => item.trim()) : [],
-        internship_importance: step3Data?.internshipImportance || 5,
-        leadership_interest: step3Data?.leadershipInterest === "yes",
-        alumni_network_value: step3Data?.alumniNetworkValue || 5,
-        affordability_importance: step4Data?.affordabilityImportance || 5,
-        yearly_budget: parseInt(step4Data?.yearlyBudget || "0"),
-        financial_aid_interest: step4Data?.financialAidInterest === "yes",
-        preferred_region: step5Data?.preferredRegion || "",
-        preferred_setting: step5Data?.preferredSetting || "",
-        preferred_living_arrangement: step5Data?.preferredLivingArrangement || "",
-        important_facilities: step6Data?.importantFacilities || [],
-        modern_amenities_importance: step6Data?.modernAmenitiesImportance || 5,
-        ranking_importance: step7Data?.rankingImportance || 5,
-        alumni_testimonial_influence: step7Data?.alumniTestimonialInfluence || 5,
-        important_selection_factors: step7Data?.selectionFactors || [],
-        personality_traits: step8Data?.personalityTraits || [],
-        preferred_student_population: step8Data?.studentPopulationSize || "",
-        lifestyle_preferences: step8Data?.lifestylePreferences || ""
-      };
-
-      // Save to localStorage for the dashboard to display it
-      localStorage.setItem("profileData", JSON.stringify(finalData));
-
-      // Send to backend using the API client
-      await saveQuestionnaire(username, finalData);
-
-      // Navigate to dashboard on success
-      router.push("/profile/dashboard");
-    } catch (error) {
-      console.error("Error saving questionnaire:", error);
-      // You might want to show an error message to the user here
-      alert("Failed to save your profile. Please try again.");
+  function handleFinalSubmit() {
+    if (!user?.username) {
+      console.error("No user logged in");
+      router.push("/auth");
+      return;
     }
+
+    // Format the data for API compatibility
+    const combinedProfile = {
+      preferred_fields: step1Data?.preferredFields || [],
+      learning_style: step1Data?.learningStyle || "",
+      career_goals: step1Data?.careerGoals ? [step1Data.careerGoals] : [],
+      further_education: step1Data?.furtherEducation || "",
+      culture_importance: step2Data?.cultureImportance || 5,
+      interested_activities: step2Data?.extracurriculars || [],
+      weekly_extracurricular_hours: parseInt(step2Data?.weeklyHours || "0"),
+      passionate_activities: step2Data?.passionateActivities ? step2Data.passionateActivities.split(',').map(item => item.trim()) : [],
+      internship_importance: step3Data?.internshipImportance || 5,
+      leadership_interest: step3Data?.leadershipInterest === "yes",
+      alumni_network_value: step3Data?.alumniNetworkValue || 5,
+      affordability_importance: step4Data?.affordabilityImportance || 5,
+      yearly_budget: parseInt(step4Data?.yearlyBudget || "0"),
+      financial_aid_interest: step4Data?.financialAidInterest === "yes",
+      preferred_region: step5Data?.preferredRegion || "",
+      preferred_setting: step5Data?.preferredSetting || "",
+      preferred_living_arrangement: step5Data?.preferredLivingArrangement || "",
+      important_facilities: step6Data?.importantFacilities || [],
+      modern_amenities_importance: step6Data?.modernAmenitiesImportance || 5,
+      ranking_importance: step7Data?.rankingImportance || 5,
+      alumni_testimonial_influence: step7Data?.alumniTestimonialInfluence || 5,
+      important_selection_factors: step7Data?.selectionFactors || [],
+      personality_traits: step8Data?.personalityTraits || [],
+      preferred_student_population: step8Data?.studentPopulationSize || "",
+      lifestyle_preferences: step8Data?.lifestylePreferences || ""
+    };
+
+    // Save user-specific data
+    localStorage.setItem(`profileData_${user.username}`, JSON.stringify({
+      step1: step1Data,
+      step2: step2Data,
+      step3: step3Data,
+      step4: step4Data,
+      step5: step5Data,
+      step6: step6Data,
+      step7: step7Data,
+      step8: step8Data,
+    }));
+
+    // Save formatted data for recommendations
+    localStorage.setItem("profileData", JSON.stringify(combinedProfile));
+
+    // Set a flag to prevent redirect loops 
+    localStorage.setItem("profileSubmitted", "true");
+
+    // Navigate away to dashboard
+    router.push("/profile/dashboard");
+  }
+
+  // Save a step's data and advance to next step
+  function handleStepSubmit(step: number, data: Step1Data | Step2Data | Step3Data | Step4Data | Step5Data | Step6Data | Step7Data | Step8Data) {
+    // Update the state based on which step was completed
+    switch (step) {
+      case 1:
+        setStep1Data(data as Step1Data);
+        break;
+      case 2:
+        setStep2Data(data as Step2Data);
+        break;
+      case 3:
+        setStep3Data(data as Step3Data);
+        break;
+      case 4:
+        setStep4Data(data as Step4Data);
+        break;
+      case 5:
+        setStep5Data(data as Step5Data);
+        break;
+      case 6:
+        setStep6Data(data as Step6Data);
+        break;
+      case 7:
+        setStep7Data(data as Step7Data);
+        break;
+      case 8:
+        setStep8Data(data as Step8Data);
+        break;
+    }
+
+    // If this is the last step, call the final submit handler
+    if (step === 8) {
+      handleFinalSubmit();
+    } else {
+      // Otherwise, advance to the next step
+      setCurrentStep(step + 1);
+    }
+
+    // Save progress after each step
+    if (user?.username) {
+      const currentProgress: {
+        step1: Step1Data | null;
+        step2: Step2Data | null;
+        step3: Step3Data | null;
+        step4: Step4Data | null;
+        step5: Step5Data | null;
+        step6: Step6Data | null;
+        step7: Step7Data | null;
+        step8: Step8Data | null;
+      } = {
+        step1: step1Data,
+        step2: step2Data,
+        step3: step3Data,
+        step4: step4Data,
+        step5: step5Data,
+        step6: step6Data,
+        step7: step7Data,
+        step8: step8Data,
+      };
+      
+      // Update with the current step's data
+      switch (step) {
+        case 1:
+          currentProgress.step1 = data as Step1Data;
+          break;
+        case 2:
+          currentProgress.step2 = data as Step2Data;
+          break;
+        case 3:
+          currentProgress.step3 = data as Step3Data;
+          break;
+        case 4:
+          currentProgress.step4 = data as Step4Data;
+          break;
+        case 5:
+          currentProgress.step5 = data as Step5Data;
+          break;
+        case 6:
+          currentProgress.step6 = data as Step6Data;
+          break;
+        case 7:
+          currentProgress.step7 = data as Step7Data;
+          break;
+        case 8:
+          currentProgress.step8 = data as Step8Data;
+          break;
+      }
+      
+      localStorage.setItem(`profileData_${user.username}`, JSON.stringify(currentProgress));
+    }
+  }
+
+  // Function to go back to previous step
+  function handleBack() {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  }
+
+  // Show loading state while checking auth
+  if (authLoading || isLoading) {
+    return (
+      <div className="container flex h-screen items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Loading...</h1>
+        </div>
+      </div>
+    );
+  }
+
+  // Show not logged in state
+  if (!user) {
+    return (
+      <div className="container flex h-screen items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Please log in to continue</h1>
+          <p className="text-muted-foreground">Redirecting to login page...</p>
+        </div>
+      </div>
+    );
   }
 
   function renderStep() {
     switch (currentStep) {
       case 1:
         return (
-          <Step1Form
+          <Step1Form 
             initialData={step1Data}
-            onNext={(data) => {
-              setStep1Data(data);
-              setCurrentStep(2);
-            }}
+            onNext={(data) => handleStepSubmit(1, data)}
           />
         );
       case 2:
         return (
-          <Step2Form
+          <Step2Form 
             initialData={step2Data}
-            onNext={(data) => {
-              setStep2Data(data);
-              setCurrentStep(3);
-            }}
-            onBack={() => setCurrentStep(1)}
+            onNext={(data) => handleStepSubmit(2, data)}
+            onBack={handleBack}
           />
         );
       case 3:
         return (
-          <Step3Form
+          <Step3Form 
             initialData={step3Data}
-            onNext={(data) => {
-              setStep3Data(data);
-              setCurrentStep(4);
-            }}
-            onBack={() => setCurrentStep(2)}
+            onNext={(data) => handleStepSubmit(3, data)}
+            onBack={handleBack}
           />
         );
       case 4:
         return (
-          <Step4Form
+          <Step4Form 
             initialData={step4Data}
-            onNext={(data) => {
-              setStep4Data(data);
-              setCurrentStep(5);
-            }}
-            onBack={() => setCurrentStep(3)}
+            onNext={(data) => handleStepSubmit(4, data)}
+            onBack={handleBack}
           />
         );
       case 5:
         return (
-          <Step5Form
+          <Step5Form 
             initialData={step5Data}
-            onNext={(data) => {
-              setStep5Data(data);
-              setCurrentStep(6);
-            }}
-            onBack={() => setCurrentStep(4)}
+            onNext={(data) => handleStepSubmit(5, data)}
+            onBack={handleBack}
           />
         );
       case 6:
         return (
-          <Step6Form
+          <Step6Form 
             initialData={step6Data}
-            onNext={(data) => {
-              setStep6Data(data);
-              setCurrentStep(7);
-            }}
-            onBack={() => setCurrentStep(5)}
+            onNext={(data) => handleStepSubmit(6, data)}
+            onBack={handleBack}
           />
         );
       case 7:
         return (
-          <Step7Form
+          <Step7Form 
             initialData={step7Data}
-            onNext={(data) => {
-              setStep7Data(data);
-              setCurrentStep(8);
-            }}
-            onBack={() => setCurrentStep(6)}
+            onNext={(data) => handleStepSubmit(7, data)}
+            onBack={handleBack}
           />
         );
       case 8:
         return (
-          <Step8Form
+          <Step8Form 
             initialData={step8Data}
-            onNext={(data) => {
-              setStep8Data(data);
-              // We're done – handle final submission
-              handleFinalSubmit();
-            }}
-            onBack={() => setCurrentStep(7)}
+            onNext={(data) => handleStepSubmit(8, data)}
+            onBack={handleBack}
           />
         );
       default:
-        return <div>Unknown step</div>;
+        return null;
     }
   }
 
   return (
-    <div className="container flex h-screen flex-col">
-      <div className="flex items-center justify-center mt-6">
-        <Card className="w-[650px]">
-          <CardHeader>
-            <CardTitle>Profile Setup (Step {currentStep} of 8)</CardTitle>
-            <CardDescription>Fill out each section to get recommendations.</CardDescription>
-          </CardHeader>
-          <CardContent>{renderStep()}</CardContent>
-        </Card>
-      </div>
+    <div className="container py-8">
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle>Profile Setup</CardTitle>
+          <CardDescription>Step {currentStep} of 8</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {renderStep()}
+        </CardContent>
+      </Card>
     </div>
   );
 }
