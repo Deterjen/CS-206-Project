@@ -117,8 +117,8 @@ export default function ProfileDashboardPage() {
       setIsLoading(true)
       // Get recommendations with 3 results
       await getRecommendations(user.username, 3)
-      // Navigate to recommendations page
-      router.push("/recommendations")
+      // Navigate to blurred recommendations page instead
+      router.push("/recommendations-blurred")
     } catch (error) {
       console.error("Error getting recommendations:", error)
       alert("Failed to get recommendations. Please try again.")
