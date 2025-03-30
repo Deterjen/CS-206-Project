@@ -102,7 +102,12 @@ export default function AuthPage() {
         preferences: undefined // We'll check this in the profile page
       }
 
-      // Store user data
+      // Store user data in localStorage
+      localStorage.setItem('username', values.username)
+      localStorage.setItem('email', '')
+      localStorage.removeItem('preferences') // Remove any existing preferences
+
+      // Store user data in context
       login(userData)
 
       // Redirect to dashboard - profile setup check will happen there
@@ -154,16 +159,19 @@ export default function AuthPage() {
       const token = loginResponse.data.access_token
       localStorage.setItem('token', token)
       
-      // Store user data directly
+      // Store user data in localStorage
+      localStorage.setItem('username', username)
+      localStorage.setItem('email', values.email)
+      localStorage.removeItem('preferences')
+      
+      // Store user data in context
       const userData = {
         username,
         email: values.email,
+        token,
         preferences: undefined
       }
-      login({
-        ...userData,
-        token
-      })
+      login(userData)
 
       // Redirect to profile setup
       router.push('/profile/setup')
