@@ -12,7 +12,7 @@ interface University {
   name: string
   location: string
   logo: string
-  matchScore: number
+  match_score: number
   images: string[]
   benefits: string[]
   drawbacks: string[]
@@ -157,7 +157,7 @@ export default function RecommendationsPage() {
               name: universityDetails.name || "Unknown University",
               location: universityDetails.location || "Location not specified",
               logo: universityDetails.logo_url || "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100, // Convert to percentage
+              match_score: rec.overall_score * 100, // Convert to percentage
               images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
               benefits: finalBenefits,
               drawbacks: finalDrawbacks,
@@ -172,7 +172,7 @@ export default function RecommendationsPage() {
               name: "Unknown University",
               location: "Location not specified",
               logo: "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100,
+              match_score: rec.overall_score * 100,
               images: [],
               benefits: [],
               drawbacks: [],
@@ -272,6 +272,22 @@ export default function RecommendationsPage() {
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
+        {/* Premium Banner */}
+        <div className="bg-green-50 p-4 border-l-4 border-green-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm leading-5 font-medium text-green-800">
+                Full Access Unlocked
+              </p>
+            </div>
+          </div>
+        </div>
+        
         <div className="p-4">
           <h2 className="text-xl font-semibold mb-4">Recommended Universities</h2>
           <div className="space-y-2">
@@ -302,7 +318,7 @@ export default function RecommendationsPage() {
                   <div>
                     <div className="font-medium">{university.name}</div>
                     <div className="text-sm opacity-75">
-                      Match Score: {Math.round(university.matchScore)}%
+                      Match Score: {Math.round(university.match_score)}%
                     </div>
                   </div>
                 </div>
@@ -324,7 +340,7 @@ export default function RecommendationsPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-primary">
-                    {Math.round(selectedUniversity.matchScore)}%
+                    {Math.round(selectedUniversity.match_score)}%
                   </div>
                   <div className="text-sm text-gray-600">Match Score</div>
                 </div>
