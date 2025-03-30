@@ -1,10 +1,8 @@
-import os
 from typing import List, Dict, Any, Optional
 
-from dotenv import load_dotenv
 from supabase import create_client, Client
 
-load_dotenv('.env.local')
+from config import SUPABASE_URL, SUPABASE_KEY
 
 
 class SupabaseDB:
@@ -34,13 +32,10 @@ class SupabaseDB:
         Returns:
             SupabaseDB: An initialized SupabaseDB instance
         """
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-
-        if not url or not key:
+        if not SUPABASE_URL or not SUPABASE_KEY:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 
-        return cls(url, key)
+        return cls(SUPABASE_URL, SUPABASE_KEY)
 
     # ===== Account Oppertaions =====
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
@@ -806,8 +801,7 @@ class SupabaseDB:
 
     def get_all_recommendations_with_details(self, aspiring_student_id: int) -> List[Dict[str, Any]]:
         """
-        Get all recommendations for an aspiring student with university and similar student details
-        in a minimal number of queries.
+        Get all recommendations for an aspiring student with focused similar student details.
 
         Args:
             aspiring_student_id: The ID of the aspiring student
@@ -837,19 +831,58 @@ class SupabaseDB:
 
         universities = {u["id"]: u for u in univ_response.data}
 
-        # Get all similar students in a single query
-        similar_students_response = self.supabase.table("similar_students") \
+        # Get all similar students for these recommendations
+        ss_response = self.supabase.table("similar_students") \
             .select("*") \
             .in_("recommendation_id", recommendation_ids) \
             .execute()
 
+        # Get all student IDs from similar students
+        all_student_ids = [ss["existing_student_id"] for ss in ss_response.data]
+
+        # Get only the required student data from the complete view
+        student_data = {}
+        if all_student_ids:
+            student_data_response = self.supabase.table("existing_students_complete_view") \
+                .select("id, university_id, program_id, year_of_study, learning_styles, academic_credentials, " +
+                        "campus_culture, extracurricular_activities, typical_student_traits, " +
+                        "important_decision_factors, retrospective_important_factors, " +
+                        "university_strengths, university_weaknesses") \
+                .in_("id", all_student_ids) \
+                .execute()
+
+            student_data = {s["id"]: s for s in student_data_response.data}
+
+        # Get program names for students
+        if student_data:
+            student_program_ids = list(set([s["program_id"] for s in student_data.values() if s.get("program_id")]))
+
+            # Get program names
+            program_names = {}
+            if student_program_ids:
+                prog_response = self.supabase.table("programs").select("id, name").in_("id",
+                                                                                       student_program_ids).execute()
+                program_names = {p["id"]: p["name"] for p in prog_response.data}
+
+            # Add program names to student data
+            for student_id, data in student_data.items():
+                prog_id = data.get("program_id")
+                data["program_name"] = program_names.get(prog_id, "Unknown Program") if prog_id else "Unknown Program"
+
         # Organize similar students by recommendation ID
         similar_students_by_rec = {}
-        for ss in similar_students_response.data:
+        for ss in ss_response.data:
             rec_id = ss["recommendation_id"]
+            student_id = ss["existing_student_id"]
+
+            # Combine similarity scores with student data
+            student_details = student_data.get(student_id, {})
+            complete_student_data = {**ss, **student_details}
+
             if rec_id not in similar_students_by_rec:
                 similar_students_by_rec[rec_id] = []
-            similar_students_by_rec[rec_id].append(ss)
+
+            similar_students_by_rec[rec_id].append(complete_student_data)
 
         # Build the complete recommendation data
         detailed_recommendations = []
@@ -938,15 +971,52 @@ class SupabaseDB:
         # Get the university (use cache if available)
         university = self.get_university_by_id(university_id)
 
-        # Get similar students
+        # Step 1: Get similar students for this recommendation
         ss_response = self.supabase.table("similar_students") \
             .select("*") \
             .eq("recommendation_id", recommendation_id) \
             .execute()
 
-        similar_students = ss_response.data
+        similar_students = []
+        if ss_response.data:
+            # Step 2: Get existing student IDs
+            student_ids = [ss["existing_student_id"] for ss in ss_response.data]
 
-        # Combine all data
+            # Step 3: Get only the required student data from the complete view
+            student_data_response = self.supabase.table("existing_students_complete_view") \
+                .select("id, university_id, program_id, year_of_study, learning_styles, academic_credentials, " +
+                        "campus_culture, extracurricular_activities, typical_student_traits, " +
+                        "important_decision_factors, retrospective_important_factors, " +
+                        "university_strengths, university_weaknesses") \
+                .in_("id", student_ids) \
+                .execute()
+
+            # Create a lookup for student data
+            student_data_map = {s["id"]: s for s in student_data_response.data}
+
+            # Step 4: Get program names for each student
+            program_ids = list(set([s["program_id"] for s in student_data_response.data if s.get("program_id")]))
+
+            program_names = {}
+            if program_ids:
+                prog_response = self.supabase.table("programs").select("id, name").in_("id", program_ids).execute()
+                program_names = {p["id"]: p["name"] for p in prog_response.data}
+
+            # Step 5: Combine all data
+            for ss in ss_response.data:
+                student_id = ss["existing_student_id"]
+                student_data = student_data_map.get(student_id, {})
+
+                # Add program name
+                prog_id = student_data.get("program_id")
+                student_data["program_name"] = program_names.get(prog_id,
+                                                                 "Unknown Program") if prog_id else "Unknown Program"
+
+                # Combine similarity scores with student data
+                similar_student = {**ss, **student_data}
+                similar_students.append(similar_student)
+
+        # Return combined data
         result = {
             "recommendation": recommendation,
             "university": university,
@@ -1097,3 +1167,82 @@ class SupabaseDB:
                 complete_students.append(student)
 
         return complete_students
+
+    def save_recommendation_justification(self, recommendation_id: int, justification_data: Dict[str, Any]) -> Dict[
+        str, Any]:
+        """
+        Save a recommendation justification to the database.
+
+        Args:
+            recommendation_id: The ID of the recommendation
+            justification_data: Dictionary containing pros, cons, and conclusion
+
+        Returns:
+            Created justification record
+        """
+        # Handle potential different formats for pros
+        pros = justification_data.get("Pros", [])
+        if not isinstance(pros, list):
+            pros = [pros] if pros else []
+
+        # Handle potential different formats for cons
+        cons = justification_data.get("Cons", [])
+        if not isinstance(cons, list):
+            cons = [cons] if cons else []
+
+        # Handle potential different formats for conclusion
+        conclusion = justification_data.get("Conclusion", "")
+        if isinstance(conclusion, list):
+            conclusion = conclusion[0] if conclusion else ""
+
+        data = {
+            "recommendation_id": recommendation_id,
+            "pros": pros,
+            "cons": cons,
+            "conclusion": conclusion
+        }
+
+        try:
+            # Check if justification already exists
+            existing = self.get_recommendation_justification(recommendation_id)
+            if existing:
+                # Update existing justification
+                response = self.supabase.table("recommendation_justifications").update(data).eq("recommendation_id",
+                                                                                                recommendation_id).execute()
+            else:
+                # Insert new justification
+                response = self.supabase.table("recommendation_justifications").insert(data).execute()
+
+            return response.data[0] if response.data else None
+        except Exception as e:
+            print(f"Error saving recommendation justification: {e}")
+            return None
+
+    def get_recommendation_justification(self, recommendation_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a recommendation justification from the database.
+        
+        Args:
+            recommendation_id: The ID of the recommendation
+        
+        Returns:
+            Justification record or None if not found
+        """
+        try:
+            response = self.supabase.table("recommendation_justifications").select("*").eq("recommendation_id",
+                                                                                           recommendation_id).limit(
+                1).execute()
+
+            if response.data:
+                justification = response.data[0]
+                # Format it to match the structure expected by the frontend
+                return {
+                    "Pros": justification.get("pros", []),
+                    "Cons": justification.get("cons", []),
+                    "Conclusion": justification.get("conclusion", "")
+                }
+
+            return None
+        except Exception as e:
+            print(f"Error retrieving recommendation justification: {e}")
+            return None
