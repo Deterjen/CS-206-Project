@@ -1,3 +1,5 @@
+// recommendations/page.tsx - Replace with this optimized version
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -28,12 +30,34 @@ export default function RecommendationsPage() {
   const [universities, setUniversities] = useState<University[]>([])
   const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingStage, setLoadingStage] = useState<string>("") // Track loading stages
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
+
+  // Array of engaging loading messages to cycle through
+  const loadingMessages = [
+    // Initial analysis phase
+    "Analyzing your academic preferences...",
+    "Evaluating your extracurricular interests...",
+    "Processing your career aspirations...",
+    "Examining financial parameters...",
+    
+    // Matching phase
+    "Identifying universities with matching programs...",
+    "Finding similar student profiles...",
+    "Calculating cultural fit scores...",
+    "Running geographic preference analysis...",
+    "Evaluating campus facilities that match your needs...",
+    
+    // Recommendation finalization phase
+    "Ranking universities by overall compatibility...",
+    "Generating personalized match scores...",
+    "Preparing your customized university insights...",
+    "Finalizing top recommendations for you...",
+    "Gathering insights from similar students..."
+  ];
 
   const loadRecommendations = async () => {
     if (!user?.username) {
-      // Only show error and redirect if we're sure auth has finished loading
-      // and we've actually tried to load at least once
       if (!isAuthLoading && hasAttemptedLoad) {
         toast({
           title: "Error",
@@ -45,156 +69,141 @@ export default function RecommendationsPage() {
       return
     }
 
+    // Immediately display any cached recommendations without delay
+    try {
+      const cachedRecommendations = localStorage.getItem("cachedRecommendations")
+      if (cachedRecommendations) {
+        console.log("Using cached recommendations")
+        const parsedRecommendations = JSON.parse(cachedRecommendations)
+        setUniversities(parsedRecommendations)
+        if (parsedRecommendations.length > 0) {
+          setSelectedUniversity(parsedRecommendations[0])
+        }
+        // Don't clear the cache immediately - we'll do it after a brief delay
+        // to ensure smooth rendering first
+        setTimeout(() => localStorage.removeItem("cachedRecommendations"), 2000)
+        setHasAttemptedLoad(true)
+        // Even with cached data, we can still return now - no need to fetch fresh data
+        return
+      }
+    } catch (error) {
+      console.error("Error reading cached recommendations:", error)
+      // Continue with API call if cache read fails
+    }
+
+    // If we reach here, there was no cache or an error reading it
     setIsLoading(true)
+    setLoadingStage(loadingMessages[0]);
+    
     try {
       // Get recommendations first
+      setLoadingStage(loadingMessages[1]);
       const response = await getRecommendations(user.username, 5)
       if (!response.data) {
         throw new Error("No recommendations data received")
       }
       
-      // Use response data as is without type casting
       const recommendations = response.data
-      console.log("Recommendations received:", recommendations)
       
-      // Fetch details for each recommendation
-      const universitiesWithDetails = await Promise.all(
-        recommendations.map(async (rec) => {
-          try {
-            // Get both details and justification
-            const [detailsResponse, justificationResponse] = await Promise.all([
-              getRecommendationDetails(user.username, rec.id),
-              getRecommendationJustification(user.username, rec.id)
-            ])
-            
-            const details = detailsResponse.data || {}
-            const justification = justificationResponse.data || {}
-            
-            console.log(`Details for university ${rec.university_id}:`, details)
-            console.log(`Raw justification for university ${rec.university_id}:`, justification)
-            
-            // Try to handle various possible formats of justification data
-            // Direct dump of the object for debugging
-            console.log(`Justification JSON: ${JSON.stringify(justification)}`)
-            
-            // Log every property to see what we might be missing
-            if (typeof justification === 'object' && justification !== null) {
-              console.log("Available properties in justification:")
-              Object.keys(justification).forEach(key => {
-                console.log(`${key}: ${JSON.stringify(justification[key])}`)
-              })
-            }
-
-            // Extract university details from the nested structure
-            const universityDetails = details.university || {}
-            
-            // Extract justification data using the correct case-sensitive property names and handle all possible formats
-            let benefits = []
-            let drawbacks = []
-            let suitabilityReasons = []
-            
-            // Handle case where the response might be nested
-            const justData = justification.data || justification
-            
-            // Check for array properties first, then check string properties
-            if (Array.isArray(justData.Pros)) {
-              benefits = justData.Pros
-            } else if (justData.Pros) {
-              benefits = [justData.Pros]
-            }
-            
-            if (Array.isArray(justData.Cons)) {
-              drawbacks = justData.Cons
-            } else if (justData.Cons) {
-              drawbacks = [justData.Cons]
-            }
-            
-            if (Array.isArray(justData.Conclusion)) {
-              suitabilityReasons = justData.Conclusion
-            } else if (justData.Conclusion) {
-              suitabilityReasons = [justData.Conclusion]
-            }
-            
-            // If benefits is still empty, try lowercase properties
-            if (benefits.length === 0 && Array.isArray(justData.pros)) {
-              benefits = justData.pros
-            } else if (benefits.length === 0 && justData.pros) {
-              benefits = [justData.pros]
-            }
-            
-            if (drawbacks.length === 0 && Array.isArray(justData.cons)) {
-              drawbacks = justData.cons
-            } else if (drawbacks.length === 0 && justData.cons) {
-              drawbacks = [justData.cons]
-            }
-            
-            if (suitabilityReasons.length === 0 && Array.isArray(justData.conclusion)) {
-              suitabilityReasons = justData.conclusion
-            } else if (suitabilityReasons.length === 0 && justData.conclusion) {
-              suitabilityReasons = [justData.conclusion]
-            }
-            
-            console.log(`Processed data for ${universityDetails.name}:`, {
-              benefits,
-              drawbacks,
-              suitabilityReasons
-            })
-            
-            // Add guard to ensure we have arrays for these properties
-            const finalBenefits = Array.isArray(benefits) ? benefits : []
-            const finalDrawbacks = Array.isArray(drawbacks) ? drawbacks : []
-            const finalSuitabilityReasons = Array.isArray(suitabilityReasons) ? suitabilityReasons : []
-            
-            console.log(`FINAL data being returned:`, {
-              name: universityDetails.name || "Unknown University",
-              benefits: finalBenefits,
-              drawbacks: finalDrawbacks,
-              suitabilityReasons: finalSuitabilityReasons
-            })
-            
-            return {
-              id: rec.id.toString(),
-              name: universityDetails.name || "Unknown University",
-              location: universityDetails.location || "Location not specified",
-              logo: universityDetails.logo_url || "/placeholder-logo.svg",
-              match_score: rec.overall_score * 100, // Convert to percentage
-              images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
-              benefits: finalBenefits,
-              drawbacks: finalDrawbacks,
-              suitabilityReasons: finalSuitabilityReasons,
-              hasLogoFallback: false,
-              hasImageFallback: false
-            }
-          } catch (error) {
-            console.error(`Error fetching details for university ${rec.university_id}:`, error)
-            return {
-              id: rec.id.toString(),
-              name: "Unknown University",
-              location: "Location not specified",
-              logo: "/placeholder-logo.svg",
-              match_score: rec.overall_score * 100,
-              images: [],
-              benefits: [],
-              drawbacks: [],
-              suitabilityReasons: [],
-              hasLogoFallback: true,
-              hasImageFallback: true
-            }
-          }
-        })
-      )
-
-      console.log("Universities with details:", universitiesWithDetails)
+      // Optimize fetching details by processing in batches rather than all at once
+      setLoadingStage(loadingMessages[2]);
+      const universitiesWithDetails: University[] = []
       
+      // Process in smaller batches to show progress faster
+      const batchSize = 2; // Process 2 universities at a time
+      for (let i = 0; i < recommendations.length; i += batchSize) {
+        const batch = recommendations.slice(i, i + batchSize)
+        
+        const messageIndex = Math.min(
+          3 + Math.floor((i / recommendations.length) * (loadingMessages.length - 3)),
+          loadingMessages.length - 1
+        );
+        setLoadingStage(loadingMessages[messageIndex]);
+        
+        // Process each batch in parallel
+        const batchResults = await Promise.all(
+          batch.map(async (rec) => {
+            try {
+              // Get both details and justification
+              const [detailsResponse, justificationResponse] = await Promise.all([
+                getRecommendationDetails(user.username, rec.id),
+                getRecommendationJustification(user.username, rec.id)
+              ])
+              
+              const details = detailsResponse.data || {}
+              const justification = justificationResponse.data || {}
+              
+              // Extract university details
+              const universityDetails = details.university || {}
+              
+              // Extract justification data using simplified processing
+              const justData = justification.data || justification
+              
+              // Extract data more efficiently
+              const extractArray = (data: any, keys: string[]): string[] => {
+                for (const key of keys) {
+                  if (Array.isArray(data[key])) return data[key];
+                  if (data[key] && typeof data[key] === 'string') return [data[key]];
+                }
+                return [];
+              };
+              
+              const benefits = extractArray(justData, ['Pros', 'pros']);
+              const drawbacks = extractArray(justData, ['Cons', 'cons']);
+              const suitabilityReasons = extractArray(justData, ['Conclusion', 'conclusion']);
+              
+              return {
+                id: rec.id.toString(),
+                name: universityDetails.name || "Unknown University",
+                location: universityDetails.location || "Location not specified",
+                logo: universityDetails.logo_url || "/placeholder-logo.svg",
+                match_score: rec.overall_score * 100,
+                images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
+                benefits,
+                drawbacks,
+                suitabilityReasons,
+                hasLogoFallback: false,
+                hasImageFallback: false
+              }
+            } catch (error) {
+              console.error(`Error fetching details for university ${rec.university_id}:`, error)
+              return {
+                id: rec.id.toString(),
+                name: "Unknown University",
+                location: "Location not specified",
+                logo: "/placeholder-logo.svg",
+                match_score: rec.overall_score * 100,
+                images: [],
+                benefits: [],
+                drawbacks: [],
+                suitabilityReasons: [],
+                hasLogoFallback: true,
+                hasImageFallback: true
+              }
+            }
+          })
+        )
+        
+        // Add batch results to our array and update UI immediately with progress
+        universitiesWithDetails.push(...batchResults)
+        
+        // Update UI with what we have so far
+        if (universitiesWithDetails.length > 0 && universities.length === 0) {
+          setUniversities([...universitiesWithDetails])
+          setSelectedUniversity(universitiesWithDetails[0])
+        }
+      }
+      
+      setLoadingStage("Preparing your personalized recommendations...");
+
+      // Final update with all universities
       setUniversities(universitiesWithDetails)
-      if (universitiesWithDetails.length > 0) {
-        setSelectedUniversity(universitiesWithDetails[0])
-      } else {
-        toast({
-          title: "No Recommendations",
-          description: "No university recommendations found. Please try again.",
-          variant: "destructive",
-        })
+      
+      // Store for future use
+      try {
+        localStorage.setItem("cachedRecommendations", JSON.stringify(universitiesWithDetails))
+      } catch (error) {
+        console.error("Error storing recommendations in localStorage:", error)
       }
     } catch (err) {
       console.error("Error loading recommendations:", err)
@@ -205,6 +214,7 @@ export default function RecommendationsPage() {
       })
     } finally {
       setIsLoading(false)
+      setLoadingStage("")
       setHasAttemptedLoad(true)
     }
   }
@@ -221,18 +231,6 @@ export default function RecommendationsPage() {
     }
   }, [user?.username, isAuthLoading])
 
-  // Debug selected university
-  useEffect(() => {
-    if (selectedUniversity) {
-      console.log("SELECTED UNIVERSITY:", {
-        name: selectedUniversity.name,
-        benefits: selectedUniversity.benefits,
-        drawbacks: selectedUniversity.drawbacks,
-        suitabilityReasons: selectedUniversity.suitabilityReasons
-      })
-    }
-  }, [selectedUniversity])
-
   const handleFindRecommendations = async () => {
     await loadRecommendations()
   }
@@ -240,8 +238,9 @@ export default function RecommendationsPage() {
   // Show loading spinner while auth is initializing or during first load
   if (isAuthLoading || (!hasAttemptedLoad && !user)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+        <p className="text-gray-500">Initializing...</p>
       </div>
     )
   }
@@ -262,8 +261,9 @@ export default function RecommendationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+        <p className="text-gray-500">{loadingStage || "Loading recommendations..."}</p>
       </div>
     )
   }
@@ -290,41 +290,50 @@ export default function RecommendationsPage() {
         
         <div className="p-4">
           <h2 className="text-xl font-semibold mb-4">Recommended Universities</h2>
-          <div className="space-y-2">
-            {universities.map((university) => (
-              <button
-                key={university.id}
-                onClick={() => setSelectedUniversity(university)}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedUniversity?.id === university.id
-                    ? "bg-primary text-white"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={university.logo}
-                    alt={`${university.name} logo`}
-                    className="w-8 h-8 rounded-full"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      const uni = universities.find(u => u.id === university.id);
-                      if (uni && !uni.hasLogoFallback) {
-                        uni.hasLogoFallback = true;
-                        target.src = "/placeholder-logo.svg";
-                      }
-                    }}
-                  />
-                  <div>
-                    <div className="font-medium">{university.name}</div>
-                    <div className="text-sm opacity-75">
-                      Match Score: {Math.round(university.match_score)}%
+          {universities.length > 0 ? (
+            <div className="space-y-2">
+              {universities.map((university) => (
+                <button
+                  key={university.id}
+                  onClick={() => setSelectedUniversity(university)}
+                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    selectedUniversity?.id === university.id
+                      ? "bg-primary text-white"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={university.logo}
+                      alt={`${university.name} logo`}
+                      className="w-8 h-8 rounded-full"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        const uni = universities.find(u => u.id === university.id);
+                        if (uni && !uni.hasLogoFallback) {
+                          uni.hasLogoFallback = true;
+                          target.src = "/placeholder-logo.svg";
+                        }
+                      }}
+                    />
+                    <div>
+                      <div className="font-medium">{university.name}</div>
+                      <div className="text-sm opacity-75">
+                        Match Score: {Math.round(university.match_score)}%
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-6 text-gray-500">
+              <p>No recommendations found</p>
+              <Button variant="outline" className="mt-4" onClick={handleFindRecommendations}>
+                Refresh
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
