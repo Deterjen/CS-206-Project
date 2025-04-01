@@ -25,6 +25,19 @@ import {
 // Register Chart.js components
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
+// Function to map university names to their image paths
+const getUniversityImage = (universityName: string): string => {
+  const nameToImageMap: Record<string, string> = {
+    "National University of Singapore": "/images/NUS.png",
+    "Nanyang Technological University": "/images/NTU.png",
+    "Singapore Management University": "/images/SMU.png",
+    "Singapore University of Technology and Design": "/images/SUTD.png",
+    "Singapore Institute of Technology": "/images/SIT.png"
+  };
+  
+  return nameToImageMap[universityName] || null;
+};
+
 interface SimilarStudent {
   id: number
   recommendation_id: number
@@ -450,16 +463,17 @@ export default function RecommendationsPage() {
                   }`}
                 >
                   <div className="flex items-center space-x-3">
-                    <img
-                      src={university.logo}
-                      alt={`${university.name} logo`}
-                      className="w-8 h-8 rounded-full"
+                  <img
+                      src={getUniversityImage(university.name) || 
+                          (university.images && university.images.length > 0 ? 
+                            university.images[0] : "/placeholder-university.svg")}
+                      alt={university.name}
+                      className="w-8"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement
-                        const uni = universities.find(u => u.id === university.id)
-                        if (uni && !uni.hasLogoFallback) {
-                          uni.hasLogoFallback = true
-                          target.src = "/placeholder-logo.svg"
+                        if (!university.hasImageFallback) {
+                          university.hasImageFallback = true
+                          target.src = "/placeholder-university.svg"
                         }
                       }}
                     />
@@ -500,23 +514,6 @@ export default function RecommendationsPage() {
                   <div className="text-sm text-gray-600">Match Score</div>
                 </div>
               </div>
-
-              {selectedUniversity.images && selectedUniversity.images.length > 0 && (
-                <div className="relative h-64 mb-6 rounded-lg overflow-hidden">
-                  <img
-                    src={selectedUniversity.images[0]}
-                    alt={selectedUniversity.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      if (!selectedUniversity.hasImageFallback) {
-                        selectedUniversity.hasImageFallback = true
-                        target.src = "/placeholder-university.svg"
-                      }
-                    }}
-                  />
-                </div>
-              )}
 
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Benefits</h2>
@@ -585,7 +582,7 @@ export default function RecommendationsPage() {
               {/* University Scores Radar Chart */}
               {selectedUniversity && (
                 <div className="mb-6">
-                  <h2 className="text-xl font-semibold mb-3">University Scores</h2>
+                  <h2 className="text-xl font-semibold mb-3">University Similarity Scores</h2>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="w-full max-w-xs mx-auto">
                       <Radar
