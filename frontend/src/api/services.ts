@@ -110,13 +110,4 @@ export const recommendationService = {
   getRecommendationDetails: async (username: string, universityId: number) => {
     return apiClient.get(`/recommendation/${username}/details/${universityId}`);
   },
-
-  getRecommendationJustification: async (
-    username: string,
-    universityId: number
-  ) => {
-    return apiClient.get(
-      `/recommendation/${username}/justification/${universityId}`
-    );
-  },
 };
