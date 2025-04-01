@@ -62,7 +62,7 @@ export default function ProfilePage() {
       }
 
       await authService.updateUser(username, {
-        email: data.email,
+        username: data.email, 
         current_password: data.currentPassword,
         new_password: data.newPassword,
       })
