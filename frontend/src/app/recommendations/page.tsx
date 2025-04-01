@@ -27,15 +27,15 @@ ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, 
 
 // Function to map university names to their image paths
 const getUniversityImage = (universityName: string): string => {
-  const nameToImageMap: Record<string, string> = {
+  const nameToImageMap: { [key: string]: string } = {
     "National University of Singapore": "/images/NUS.png",
     "Nanyang Technological University": "/images/NTU.png",
     "Singapore Management University": "/images/SMU.png",
     "Singapore University of Technology and Design": "/images/SUTD.png",
-    "Singapore Institute of Technology": "/images/SIT.png"
+    "Singapore Institute of Technology": "/images/SIT.png",
   };
-  
-  return nameToImageMap[universityName] || null;
+
+  return nameToImageMap[universityName] || "/images/school.svg";
 };
 
 interface SimilarStudent {

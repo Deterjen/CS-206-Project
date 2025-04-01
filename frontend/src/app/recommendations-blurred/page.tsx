@@ -48,7 +48,7 @@ const getUniversityImage = (universityName: string): string => {
     "Singapore Institute of Technology": "/images/SIT.png",
   };
 
-  return nameToImageMap[universityName] || "/images/default-university.png";
+  return nameToImageMap[universityName] || "/images/school.svg";
 };
 
 interface SimilarStudent {
