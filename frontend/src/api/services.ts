@@ -12,8 +12,9 @@ export interface RegisterData {
 }
 
 export interface UserUpdateData {
-  new_username?: string;
-  new_email?: string;
+  email?: string;
+  current_password?: string;
+  new_password?: string;
 }
 
 export interface RecommendationRequest {
