@@ -9,43 +9,8 @@ import {
   getRecommendationJustification,
   getSimilarStudents 
 } from "@/api/apiClient"
-import { 
-  getRecommendations, 
-  getRecommendationDetails, 
-  getRecommendationJustification,
-  getSimilarStudents 
-} from "@/api/apiClient"
 import { useAuthContext } from "@/providers/AuthProvider"
 import { Button } from "@/components/ui/button"
-import { Radar } from "react-chartjs-2"
-import { 
-  Chart as ChartJS, 
-  RadialLinearScale, 
-  PointElement, 
-  LineElement, 
-  Filler, 
-  Tooltip, 
-  Legend 
-} from "chart.js"
-
-// Register Chart.js components
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
-
-interface SimilarStudent {
-  id: number
-  recommendation_id: number
-  existing_student_id: string
-  similarity_score: number
-  academic_similarity: number
-  social_similarity: number
-  financial_similarity: number
-  career_similarity: number
-  geographic_similarity: number
-  facilities_similarity: number
-  reputation_similarity: number
-  personal_fit_similarity: number
-  created_at: string
-}
 import { Radar } from "react-chartjs-2"
 import { 
   Chart as ChartJS, 
@@ -87,17 +52,8 @@ interface University {
   drawbacks: string[]
   suitabilityReasons: string[]
   similarStudents?: SimilarStudent[]
-  similarStudents?: SimilarStudent[]
   hasLogoFallback?: boolean
   hasImageFallback?: boolean
-  academic_score?: number
-  personal_fit_score?: number
-  social_score?: number
-  financial_score?: number
-  career_score?: number
-  geographic_score?: number
-  facilities_score?: number
-  reputation_score?: number
   academic_score?: number
   personal_fit_score?: number
   social_score?: number
@@ -117,7 +73,6 @@ export default function RecommendationsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadingStage, setLoadingStage] = useState<string>("")
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
-  
 
   const loadingMessages = [
     "Analyzing your academic preferences...",
@@ -283,102 +238,7 @@ export default function RecommendationsPage() {
         }
       }
       
-      setLoadingStage("Preparing your personalized recommendations...");
-
-      // Final update with all universities
-      
-      const universitiesWithDetails = await Promise.all(
-        recommendations.map(async (rec) => {
-          try {
-            const [detailsResponse, justificationResponse, similarStudentsResponse] = await Promise.all([
-              getRecommendationDetails(user.username, rec.id),
-              getRecommendationJustification(user.username, rec.id).catch(err => {
-                console.error(`Failed to get justification for ${rec.university_id}:`, err)
-                return { data: {} }
-              }),
-              getSimilarStudents(user.username, rec.id).catch(err => {
-                console.error(`Failed to get similar students for ${rec.university_id}:`, err)
-                return { data: [] }
-              })
-            ])
-            
-            const details = detailsResponse.data || {}
-            const recommendation = details.recommendation || {}
-            const justification = justificationResponse.data || {}
-            const similarStudents = similarStudentsResponse.data || []
-            
-            console.log(`Details for university ${rec.university_id}:`, details)
-            console.log(`Justification for university ${rec.university_id}:`, justification)
-            console.log(`Similar students for university ${rec.university_id}:`, similarStudents)
-
-            const universityDetails = details.university || {}
-            const justData = justification.data || justification
-            
-            let benefits = Array.isArray(justData.Pros) ? justData.Pros : 
-                          justData.Pros ? [justData.Pros] : 
-                          Array.isArray(justData.pros) ? justData.pros :
-                          justData.pros ? [justData.pros] : []
-            
-            let drawbacks = Array.isArray(justData.Cons) ? justData.Cons : 
-                           justData.Cons ? [justData.Cons] : 
-                           Array.isArray(justData.cons) ? justData.cons :
-                           justData.cons ? [justData.cons] : []
-            
-            let suitabilityReasons = Array.isArray(justData.Conclusion) ? justData.Conclusion : 
-                                   justData.Conclusion ? [justData.Conclusion] : 
-                                   Array.isArray(justData.conclusion) ? justData.conclusion :
-                                   justData.conclusion ? [justData.conclusion] : []
-            
-            return {
-              id: rec.id.toString(),
-              name: universityDetails.name || "Unknown University",
-              location: universityDetails.location || "Location not specified",
-              logo: universityDetails.logo_url || "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100,
-              images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
-              benefits,
-              drawbacks,
-              suitabilityReasons,
-              similarStudents: Array.isArray(similarStudents) ? similarStudents : [],
-              hasLogoFallback: false,
-              hasImageFallback: false,
-              academic_score: recommendation.academic_score || 0,
-              personal_fit_score: recommendation.personal_fit_score || 0,
-              social_score: recommendation.social_score || 0,
-              financial_score: recommendation.financial_score || 0,
-              career_score: recommendation.career_score || 0,
-              geographic_score: recommendation.geographic_score || 0,
-              facilities_score: recommendation.overall_fit_score || 0,
-              reputation_score: recommendation.reputation_score || 0,
-            }
-          } catch (error) {
-            console.error(`Error fetching details for university ${rec.university_id}:`, error)
-            return {
-              id: rec.id.toString(),
-              name: "Unknown University",
-              location: "Location not specified",
-              logo: "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100,
-              images: [],
-              benefits: [],
-              drawbacks: [],
-              suitabilityReasons: [],
-              similarStudents: [],
-              hasLogoFallback: true,
-              hasImageFallback: true,
-              academic_score: 0,
-              personal_fit_score: 0,
-              social_score: 0,
-              financial_score: 0,
-              career_score: 0,
-              geographic_score: 0,
-              facilities_score: 0,
-              reputation_score: 0,
-            }
-          }
-        })
-      )
-
+      setLoadingStage("Preparing your personalized recommendations...")
       setUniversities(universitiesWithDetails)
       
       try {
@@ -430,60 +290,50 @@ export default function RecommendationsPage() {
     }
   }, [selectedUniversity])
 
-  useEffect(() => {
-    if (selectedUniversity) {
-      console.log("SELECTED UNIVERSITY:", {
-        name: selectedUniversity.name,
-        benefits: selectedUniversity.benefits,
-        drawbacks: selectedUniversity.drawbacks,
-        suitabilityReasons: selectedUniversity.suitabilityReasons,
-        similarStudents: selectedUniversity.similarStudents,
-        academic_score: selectedUniversity.academic_score,
-        personal_fit_score: selectedUniversity.personal_fit_score,
-        social_score: selectedUniversity.social_score,
-        financial_score: selectedUniversity.financial_score,
-        career_score: selectedUniversity.career_score,
-        geographic_score: selectedUniversity.geographic_score,
-        facilities_score: selectedUniversity.facilities_score,
-        reputation_score: selectedUniversity.reputation_score,
-      })
-    }
-  }, [selectedUniversity])
-
   const handleFindRecommendations = async () => {
     await loadRecommendations()
   }
 
-  // Radar chart configuration for comparing current user and similar student
-  const getRadarChartData = (university: University, student: SimilarStudent, studentNumber: number) => {
-    return {
-      labels: [
-        "Academic",
-        "Personal Fit",
-        "Social",
-        "Financial",
-        "Career",
-        "Geographic",
-        "Facilities",
-        "Reputation",
+  const getRadarChartData = (university: University, student?: SimilarStudent, studentNumber?: number) => {
+    const labels = [
+      "Academic",
+      "Personal Fit",
+      "Social",
+      "Financial",
+      "Career",
+      "Geographic",
+      "Facilities",
+      "Reputation",
+    ]
+
+    const universityDataset = {
+      label: "Your Scores",
+      data: [
+        (university.academic_score ?? 0) * 10,
+        (university.personal_fit_score ?? 0) * 10,
+        (university.social_score ?? 0) * 10,
+        (university.financial_score ?? 0) * 10,
+        (university.career_score ?? 0) * 10,
+        (university.geographic_score ?? 0) * 10,
+        (university.facilities_score ?? 0) * 10,
+        (university.reputation_score ?? 0) * 10,
       ],
+      backgroundColor: "rgba(255, 99, 132, 0.2)",
+      borderColor: "rgba(255, 99, 132, 1)",
+      borderWidth: 1,
+    }
+
+    if (!student) {
+      return {
+        labels,
+        datasets: [universityDataset]
+      }
+    }
+
+    return {
+      labels,
       datasets: [
-        {
-          label: "Your Similarity",
-          data: [
-            (university.academic_score ?? 0) * 10,
-            (university.personal_fit_score ?? 0) * 10,
-            (university.social_score ?? 0) * 10,
-            (university.financial_score ?? 0) * 10,
-            (university.career_score ?? 0) * 10,
-            (university.geographic_score ?? 0) * 10,
-            (university.facilities_score ?? 0) * 10,
-            (university.reputation_score ?? 0) * 10,
-          ],
-          backgroundColor: "rgba(255, 99, 132, 0.2)", // Red for current user
-          borderColor: "rgba(255, 99, 132, 1)",
-          borderWidth: 1,
-        },
+        universityDataset,
         {
           label: `Student ${studentNumber} Similarity`,
           data: [
@@ -496,7 +346,7 @@ export default function RecommendationsPage() {
             student.facilities_similarity * 10,
             student.reputation_similarity * 10,
           ],
-          backgroundColor: "rgba(0, 255, 0, 0.2)", // Green for similar student
+          backgroundColor: "rgba(0, 255, 0, 0.2)",
           borderColor: "rgba(0, 255, 0, 1)",
           borderWidth: 1,
         },
@@ -587,41 +437,50 @@ export default function RecommendationsPage() {
         
         <div className="p-4">
           <h2 className="text-xl font-semibold mb-4">Recommended Universities</h2>
-          <div className="space-y-2">
-            {universities.map((university) => (
-              <button
-                key={university.id}
-                onClick={() => setSelectedUniversity(university)}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedUniversity?.id === university.id
-                    ? "bg-primary text-white"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={university.logo}
-                    alt={`${university.name} logo`}
-                    className="w-8 h-8 rounded-full"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      const uni = universities.find(u => u.id === university.id)
-                      if (uni && !uni.hasLogoFallback) {
-                        uni.hasLogoFallback = true
-                        target.src = "/placeholder-logo.svg"
-                      }
-                    }}
-                  />
-                  <div>
-                    <div className="font-medium">{university.name}</div>
-                    <div className="text-sm opacity-75">
-                      Match Score: {Math.round(university.matchScore)}%
+          {universities.length > 0 ? (
+            <div className="space-y-2">
+              {universities.map((university) => (
+                <button
+                  key={university.id}
+                  onClick={() => setSelectedUniversity(university)}
+                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    selectedUniversity?.id === university.id
+                      ? "bg-primary text-white"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={university.logo}
+                      alt={`${university.name} logo`}
+                      className="w-8 h-8 rounded-full"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        const uni = universities.find(u => u.id === university.id)
+                        if (uni && !uni.hasLogoFallback) {
+                          uni.hasLogoFallback = true
+                          target.src = "/placeholder-logo.svg"
+                        }
+                      }}
+                    />
+                    <div>
+                      <div className="font-medium">{university.name}</div>
+                      <div className="text-sm opacity-75">
+                        Match Score: {Math.round(university.matchScore)}%
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-6 text-gray-500">
+              <p>No recommendations found</p>
+              <Button variant="outline" className="mt-4" onClick={handleFindRecommendations}>
+                Refresh
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -650,10 +509,7 @@ export default function RecommendationsPage() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement
-                      const target = e.target as HTMLImageElement
                       if (!selectedUniversity.hasImageFallback) {
-                        selectedUniversity.hasImageFallback = true
-                        target.src = "/placeholder-university.svg"
                         selectedUniversity.hasImageFallback = true
                         target.src = "/placeholder-university.svg"
                       }
@@ -695,7 +551,6 @@ export default function RecommendationsPage() {
               </div>
 
               <div className="mb-6">
-              <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Why This University?</h2>
                 {selectedUniversity.suitabilityReasons && selectedUniversity.suitabilityReasons.length > 0 ? (
                   <ul className="space-y-2">
@@ -727,7 +582,22 @@ export default function RecommendationsPage() {
                 )}
               </div>
 
-              {/* Radar Charts Comparing Current User and Similar Students */}
+              {/* University Scores Radar Chart */}
+              {selectedUniversity && (
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-3">University Scores</h2>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="w-full max-w-xs mx-auto">
+                      <Radar
+                        data={getRadarChartData(selectedUniversity)}
+                        options={radarOptions}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comparison Radar Charts */}
               {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 && (
                 <div className="mb-6">
                   <h2 className="text-xl font-semibold mb-3">Similarity Analysis (You vs. Similar Students)</h2>
