@@ -1,10 +1,14 @@
-// recommendations/page.tsx - Replace with this optimized version
-
 "use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import { 
+  getRecommendations, 
+  getRecommendationDetails, 
+  getRecommendationJustification,
+  getSimilarStudents 
+} from "@/api/apiClient"
 import { 
   getRecommendations, 
   getRecommendationDetails, 
@@ -42,20 +46,58 @@ interface SimilarStudent {
   personal_fit_similarity: number
   created_at: string
 }
+import { Radar } from "react-chartjs-2"
+import { 
+  Chart as ChartJS, 
+  RadialLinearScale, 
+  PointElement, 
+  LineElement, 
+  Filler, 
+  Tooltip, 
+  Legend 
+} from "chart.js"
+
+// Register Chart.js components
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+
+interface SimilarStudent {
+  id: number
+  recommendation_id: number
+  existing_student_id: string
+  similarity_score: number
+  academic_similarity: number
+  social_similarity: number
+  financial_similarity: number
+  career_similarity: number
+  geographic_similarity: number
+  facilities_similarity: number
+  reputation_similarity: number
+  personal_fit_similarity: number
+  created_at: string
+}
 
 interface University {
   id: string
   name: string
   location: string
   logo: string
-  match_score: number
+  matchScore: number
   images: string[]
   benefits: string[]
   drawbacks: string[]
   suitabilityReasons: string[]
   similarStudents?: SimilarStudent[]
+  similarStudents?: SimilarStudent[]
   hasLogoFallback?: boolean
   hasImageFallback?: boolean
+  academic_score?: number
+  personal_fit_score?: number
+  social_score?: number
+  financial_score?: number
+  career_score?: number
+  geographic_score?: number
+  facilities_score?: number
+  reputation_score?: number
   academic_score?: number
   personal_fit_score?: number
   social_score?: number
@@ -73,25 +115,20 @@ export default function RecommendationsPage() {
   const [universities, setUniversities] = useState<University[]>([])
   const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [loadingStage, setLoadingStage] = useState<string>("") // Track loading stages
+  const [loadingStage, setLoadingStage] = useState<string>("")
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
+  
 
-  // Array of engaging loading messages to cycle through
   const loadingMessages = [
-    // Initial analysis phase
     "Analyzing your academic preferences...",
     "Evaluating your extracurricular interests...",
     "Processing your career aspirations...",
     "Examining financial parameters...",
-    
-    // Matching phase
     "Identifying universities with matching programs...",
     "Finding similar student profiles...",
     "Calculating cultural fit scores...",
     "Running geographic preference analysis...",
     "Evaluating campus facilities that match your needs...",
-    
-    // Recommendation finalization phase
     "Ranking universities by overall compatibility...",
     "Generating personalized match scores...",
     "Preparing your customized university insights...",
@@ -112,7 +149,7 @@ export default function RecommendationsPage() {
       return
     }
 
-    // Immediately display any cached recommendations without delay
+    // Check for cached recommendations first
     try {
       const cachedRecommendations = localStorage.getItem("cachedRecommendations")
       if (cachedRecommendations) {
@@ -122,91 +159,93 @@ export default function RecommendationsPage() {
         if (parsedRecommendations.length > 0) {
           setSelectedUniversity(parsedRecommendations[0])
         }
-        // Don't clear the cache immediately - we'll do it after a brief delay
-        // to ensure smooth rendering first
         setTimeout(() => localStorage.removeItem("cachedRecommendations"), 2000)
         setHasAttemptedLoad(true)
-        // Even with cached data, we can still return now - no need to fetch fresh data
         return
       }
     } catch (error) {
       console.error("Error reading cached recommendations:", error)
-      // Continue with API call if cache read fails
     }
 
-    // If we reach here, there was no cache or an error reading it
     setIsLoading(true)
-    setLoadingStage(loadingMessages[0]);
+    setLoadingStage(loadingMessages[0])
     
     try {
-      // Get recommendations first
-      setLoadingStage(loadingMessages[1]);
+      setLoadingStage(loadingMessages[1])
       const response = await getRecommendations(user.username, 5)
       if (!response.data) {
         throw new Error("No recommendations data received")
       }
       
       const recommendations = response.data
-      
-      // Optimize fetching details by processing in batches rather than all at once
-      setLoadingStage(loadingMessages[2]);
       const universitiesWithDetails: University[] = []
       
-      // Process in smaller batches to show progress faster
-      const batchSize = 2; // Process 2 universities at a time
+      const batchSize = 2
       for (let i = 0; i < recommendations.length; i += batchSize) {
         const batch = recommendations.slice(i, i + batchSize)
         
         const messageIndex = Math.min(
           3 + Math.floor((i / recommendations.length) * (loadingMessages.length - 3)),
           loadingMessages.length - 1
-        );
-        setLoadingStage(loadingMessages[messageIndex]);
+        )
+        setLoadingStage(loadingMessages[messageIndex])
         
-        // Process each batch in parallel
         const batchResults = await Promise.all(
           batch.map(async (rec) => {
             try {
-              // Get both details and justification
-              const [detailsResponse, justificationResponse] = await Promise.all([
+              const [detailsResponse, justificationResponse, similarStudentsResponse] = await Promise.all([
                 getRecommendationDetails(user.username, rec.id),
-                getRecommendationJustification(user.username, rec.id)
+                getRecommendationJustification(user.username, rec.id).catch(err => {
+                  console.error(`Failed to get justification for ${rec.university_id}:`, err)
+                  return { data: {} }
+                }),
+                getSimilarStudents(user.username, rec.id).catch(err => {
+                  console.error(`Failed to get similar students for ${rec.university_id}:`, err)
+                  return { data: [] }
+                })
               ])
               
               const details = detailsResponse.data || {}
+              const recommendation = details.recommendation || {}
               const justification = justificationResponse.data || {}
+              const similarStudents = similarStudentsResponse.data || []
               
-              // Extract university details
               const universityDetails = details.university || {}
-              
-              // Extract justification data using simplified processing
               const justData = justification.data || justification
               
-              // Extract data more efficiently
               const extractArray = (data: any, keys: string[]): string[] => {
                 for (const key of keys) {
-                  if (Array.isArray(data[key])) return data[key];
-                  if (data[key] && typeof data[key] === 'string') return [data[key]];
+                  if (Array.isArray(data[key])) return data[key]
+                  if (data[key] && typeof data[key] === 'string') return [data[key]]
                 }
-                return [];
-              };
+                return []
+              }
               
-              const benefits = extractArray(justData, ['Pros', 'pros']);
-              const drawbacks = extractArray(justData, ['Cons', 'cons']);
-              const suitabilityReasons = extractArray(justData, ['Conclusion', 'conclusion']);
+              const benefits = extractArray(justData, ['Pros', 'pros'])
+              const drawbacks = extractArray(justData, ['Cons', 'cons'])
+              const suitabilityReasons = extractArray(justData, ['Conclusion', 'conclusion'])
               
               return {
                 id: rec.id.toString(),
                 name: universityDetails.name || "Unknown University",
                 location: universityDetails.location || "Location not specified",
                 logo: universityDetails.logo_url || "/placeholder-logo.svg",
-                match_score: rec.overall_score * 100,
+                matchScore: rec.overall_score * 100,
                 images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
                 benefits,
                 drawbacks,
                 suitabilityReasons,
+                similarStudents: Array.isArray(similarStudents) ? similarStudents : [],
                 hasLogoFallback: false,
-                hasImageFallback: false
+                hasImageFallback: false,
+                academic_score: recommendation.academic_score || 0,
+                personal_fit_score: recommendation.personal_fit_score || 0,
+                social_score: recommendation.social_score || 0,
+                financial_score: recommendation.financial_score || 0,
+                career_score: recommendation.career_score || 0,
+                geographic_score: recommendation.geographic_score || 0,
+                facilities_score: recommendation.overall_fit_score || 0,
+                reputation_score: recommendation.reputation_score || 0,
               }
             } catch (error) {
               console.error(`Error fetching details for university ${rec.university_id}:`, error)
@@ -215,22 +254,29 @@ export default function RecommendationsPage() {
                 name: "Unknown University",
                 location: "Location not specified",
                 logo: "/placeholder-logo.svg",
-                match_score: rec.overall_score * 100,
+                matchScore: rec.overall_score * 100,
                 images: [],
                 benefits: [],
                 drawbacks: [],
                 suitabilityReasons: [],
+                similarStudents: [],
                 hasLogoFallback: true,
-                hasImageFallback: true
+                hasImageFallback: true,
+                academic_score: 0,
+                personal_fit_score: 0,
+                social_score: 0,
+                financial_score: 0,
+                career_score: 0,
+                geographic_score: 0,
+                facilities_score: 0,
+                reputation_score: 0,
               }
             }
           })
         )
         
-        // Add batch results to our array and update UI immediately with progress
         universitiesWithDetails.push(...batchResults)
         
-        // Update UI with what we have so far
         if (universitiesWithDetails.length > 0 && universities.length === 0) {
           setUniversities([...universitiesWithDetails])
           setSelectedUniversity(universitiesWithDetails[0])
@@ -335,7 +381,6 @@ export default function RecommendationsPage() {
 
       setUniversities(universitiesWithDetails)
       
-      // Store for future use
       try {
         localStorage.setItem("cachedRecommendations", JSON.stringify(universitiesWithDetails))
       } catch (error) {
@@ -364,6 +409,26 @@ export default function RecommendationsPage() {
       }
     }
   }, [user?.username, isAuthLoading])
+
+  useEffect(() => {
+    if (selectedUniversity) {
+      console.log("SELECTED UNIVERSITY:", {
+        name: selectedUniversity.name,
+        benefits: selectedUniversity.benefits,
+        drawbacks: selectedUniversity.drawbacks,
+        suitabilityReasons: selectedUniversity.suitabilityReasons,
+        similarStudents: selectedUniversity.similarStudents,
+        academic_score: selectedUniversity.academic_score,
+        personal_fit_score: selectedUniversity.personal_fit_score,
+        social_score: selectedUniversity.social_score,
+        financial_score: selectedUniversity.financial_score,
+        career_score: selectedUniversity.career_score,
+        geographic_score: selectedUniversity.geographic_score,
+        facilities_score: selectedUniversity.facilities_score,
+        reputation_score: selectedUniversity.reputation_score,
+      })
+    }
+  }, [selectedUniversity])
 
   useEffect(() => {
     if (selectedUniversity) {
@@ -505,7 +570,6 @@ export default function RecommendationsPage() {
   return (
     <div className="flex h-screen bg-gray-100">
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
-        {/* Premium Banner */}
         <div className="bg-green-50 p-4 border-l-4 border-green-500">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -572,7 +636,7 @@ export default function RecommendationsPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-primary">
-                    {Math.round(selectedUniversity.match_score)}%
+                    {Math.round(selectedUniversity.matchScore)}%
                   </div>
                   <div className="text-sm text-gray-600">Match Score</div>
                 </div>
@@ -586,7 +650,10 @@ export default function RecommendationsPage() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement
+                      const target = e.target as HTMLImageElement
                       if (!selectedUniversity.hasImageFallback) {
+                        selectedUniversity.hasImageFallback = true
+                        target.src = "/placeholder-university.svg"
                         selectedUniversity.hasImageFallback = true
                         target.src = "/placeholder-university.svg"
                       }
@@ -627,6 +694,7 @@ export default function RecommendationsPage() {
                 )}
               </div>
 
+              <div className="mb-6">
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Why This University?</h2>
                 {selectedUniversity.suitabilityReasons && selectedUniversity.suitabilityReasons.length > 0 ? (
