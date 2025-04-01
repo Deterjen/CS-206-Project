@@ -14,5 +14,5 @@ export const getUniversityImage = (universityName: string): string => {
     "Singapore Institute of Technology": "/images/SIT.png"
   };
   
-  return nameToImageMap[universityName] || null;
+  return nameToImageMap[universityName] || "/images/default.png";
 };

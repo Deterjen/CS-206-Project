@@ -554,7 +554,7 @@ export default function RecommendationsPage() {
                           : "/placeholder-university.svg")
                       }
                       alt={university.name}
-                      className="w-8"
+                      className={index < 3 ? "blur-sm w-8" : "w-8"}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         if (!university.hasImageFallback) {
