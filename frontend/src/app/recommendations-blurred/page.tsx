@@ -1,83 +1,106 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
-import { 
-  getRecommendations, 
-  getRecommendationDetails, 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  getRecommendations,
+  getRecommendationDetails,
   getRecommendationJustification,
-  getSimilarStudents 
-} from "@/api/apiClient"
-import { useAuthContext } from "@/providers/AuthProvider"
-import { Button } from "@/components/ui/button"
-import { Radar } from "react-chartjs-2"
-import { 
-  Chart as ChartJS, 
-  RadialLinearScale, 
-  PointElement, 
-  LineElement, 
-  Filler, 
-  Tooltip, 
-  Legend 
-} from "chart.js"
-import dynamic from "next/dynamic"
+  getSimilarStudents,
+} from "@/api/apiClient";
+import { useAuthContext } from "@/providers/AuthProvider";
+import { Button } from "@/components/ui/button";
+import { Radar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import dynamic from "next/dynamic";
 
 // Register Chart.js components
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+ChartJS.register(
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip,
+  Legend
+);
 
 // Dynamically import the payment popup component
-const PaymentPopup = dynamic(() => import("@/components/payment"), { ssr: false })
+const PaymentPopup = dynamic(() => import("@/components/payment"), {
+  ssr: false,
+});
+
+// Function to map university names to their image paths
+const getUniversityImage = (universityName: string): string => {
+  const nameToImageMap: Record<string, string> = {
+    "National University of Singapore": "/images/NUS.png",
+    "Nanyang Technological University": "/images/NTU.png",
+    "Singapore Management University": "/images/SMU.png",
+    "Singapore University of Technology and Design": "/images/SUTD.png",
+    "Singapore Institute of Technology": "/images/SIT.png",
+  };
+
+  return nameToImageMap[universityName] || null;
+};
 
 interface SimilarStudent {
-  id: number
-  recommendation_id: number
-  existing_student_id: string
-  similarity_score: number
-  academic_similarity: number
-  social_similarity: number
-  financial_similarity: number
-  career_similarity: number
-  geographic_similarity: number
-  facilities_similarity: number
-  reputation_similarity: number
-  personal_fit_similarity: number
-  created_at: string
+  id: number;
+  recommendation_id: number;
+  existing_student_id: string;
+  similarity_score: number;
+  academic_similarity: number;
+  social_similarity: number;
+  financial_similarity: number;
+  career_similarity: number;
+  geographic_similarity: number;
+  facilities_similarity: number;
+  reputation_similarity: number;
+  personal_fit_similarity: number;
+  created_at: string;
 }
 
 interface University {
-  id: string
-  name: string
-  location: string
-  logo: string
-  matchScore: number
-  images: string[]
-  benefits: string[]
-  drawbacks: string[]
-  suitabilityReasons: string[]
-  similarStudents?: SimilarStudent[]
-  hasLogoFallback?: boolean
-  hasImageFallback?: boolean
-  academic_score?: number
-  personal_fit_score?: number
-  social_score?: number
-  financial_score?: number
-  career_score?: number
-  geographic_score?: number
-  facilities_score?: number
-  reputation_score?: number
+  id: string;
+  name: string;
+  location: string;
+  logo: string;
+  matchScore: number;
+  images: string[];
+  benefits: string[];
+  drawbacks: string[];
+  suitabilityReasons: string[];
+  similarStudents?: SimilarStudent[];
+  hasLogoFallback?: boolean;
+  hasImageFallback?: boolean;
+  academic_score?: number;
+  personal_fit_score?: number;
+  social_score?: number;
+  financial_score?: number;
+  career_score?: number;
+  geographic_score?: number;
+  facilities_score?: number;
+  reputation_score?: number;
 }
 
 export default function RecommendationsPage() {
-  const router = useRouter()
-  const { user, isLoading: isAuthLoading } = useAuthContext()
-  const { toast } = useToast()
-  const [universities, setUniversities] = useState<University[]>([])
-  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
-  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
-  const [loadingStage, setLoadingStage] = useState<string>("")
+  const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useAuthContext();
+  const { toast } = useToast();
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [selectedUniversity, setSelectedUniversity] =
+    useState<University | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string>("");
 
   const loadingMessages = [
     "Analyzing your academic preferences...",
@@ -93,8 +116,8 @@ export default function RecommendationsPage() {
     "Generating personalized match scores...",
     "Preparing your customized university insights...",
     "Finalizing top recommendations for you...",
-    "Gathering insights from similar students..."
-  ]
+    "Gathering insights from similar students...",
+  ];
 
   const loadRecommendations = async () => {
     if (!user?.username) {
@@ -103,99 +126,128 @@ export default function RecommendationsPage() {
           title: "Error",
           description: "Please log in to view recommendations",
           variant: "destructive",
-        })
-        router.push('/auth')
+        });
+        router.push("/auth");
       }
-      return
+      return;
     }
 
     // Check for cached recommendations first
     try {
-      const cachedRecommendations = localStorage.getItem("cachedRecommendations")
+      const cachedRecommendations = localStorage.getItem(
+        "cachedRecommendations"
+      );
       if (cachedRecommendations) {
-        console.log("Using cached recommendations")
-        const parsedRecommendations = JSON.parse(cachedRecommendations)
-        setUniversities(parsedRecommendations)
+        console.log("Using cached recommendations");
+        const parsedRecommendations = JSON.parse(cachedRecommendations);
+        setUniversities(parsedRecommendations);
         if (parsedRecommendations.length > 0) {
-          setSelectedUniversity(parsedRecommendations[0])
+          setSelectedUniversity(parsedRecommendations[0]);
         }
-        setTimeout(() => localStorage.removeItem("cachedRecommendations"), 2000)
-        setHasAttemptedLoad(true)
-        return
+        setTimeout(
+          () => localStorage.removeItem("cachedRecommendations"),
+          2000
+        );
+        setHasAttemptedLoad(true);
+        return;
       }
     } catch (error) {
-      console.error("Error reading cached recommendations:", error)
+      console.error("Error reading cached recommendations:", error);
     }
 
-    setIsLoading(true)
-    setLoadingStage(loadingMessages[0])
-    
+    setIsLoading(true);
+    setLoadingStage(loadingMessages[0]);
+
     try {
-      setLoadingStage(loadingMessages[1])
-      const response = await getRecommendations(user.username, 5)
+      setLoadingStage(loadingMessages[1]);
+      const response = await getRecommendations(user.username, 5);
       if (!response.data) {
-        throw new Error("No recommendations data received")
+        throw new Error("No recommendations data received");
       }
-      
-      const recommendations = response.data
-      const universitiesWithDetails: University[] = []
-      
-      const batchSize = 2
+
+      const recommendations = response.data;
+      const universitiesWithDetails: University[] = [];
+
+      const batchSize = 2;
       for (let i = 0; i < recommendations.length; i += batchSize) {
-        const batch = recommendations.slice(i, i + batchSize)
-        
+        const batch = recommendations.slice(i, i + batchSize);
+
         const messageIndex = Math.min(
-          3 + Math.floor((i / recommendations.length) * (loadingMessages.length - 3)),
+          3 +
+            Math.floor(
+              (i / recommendations.length) * (loadingMessages.length - 3)
+            ),
           loadingMessages.length - 1
-        )
-        setLoadingStage(loadingMessages[messageIndex])
-        
+        );
+        setLoadingStage(loadingMessages[messageIndex]);
+
         const batchResults = await Promise.all(
           batch.map(async (rec) => {
             try {
-              const [detailsResponse, justificationResponse, similarStudentsResponse] = await Promise.all([
+              const [
+                detailsResponse,
+                justificationResponse,
+                similarStudentsResponse,
+              ] = await Promise.all([
                 getRecommendationDetails(user.username, rec.id),
-                getRecommendationJustification(user.username, rec.id).catch(err => {
-                  console.error(`Failed to get justification for ${rec.university_id}:`, err)
-                  return { data: {} }
+                getRecommendationJustification(user.username, rec.id).catch(
+                  (err) => {
+                    console.error(
+                      `Failed to get justification for ${rec.university_id}:`,
+                      err
+                    );
+                    return { data: {} };
+                  }
+                ),
+                getSimilarStudents(user.username, rec.id).catch((err) => {
+                  console.error(
+                    `Failed to get similar students for ${rec.university_id}:`,
+                    err
+                  );
+                  return { data: [] };
                 }),
-                getSimilarStudents(user.username, rec.id).catch(err => {
-                  console.error(`Failed to get similar students for ${rec.university_id}:`, err)
-                  return { data: [] }
-                })
-              ])
-              
-              const details = detailsResponse.data || {}
-              const recommendation = details.recommendation || {}
-              const justification = justificationResponse.data || {}
-              const similarStudents = similarStudentsResponse.data || []
-              
-              const universityDetails = details.university || {}
-              const justData = justification.data || justification
-              
+              ]);
+
+              const details = detailsResponse.data || {};
+              const recommendation = details.recommendation || {};
+              const justification = justificationResponse.data || {};
+              const similarStudents = similarStudentsResponse.data || [];
+
+              const universityDetails = details.university || {};
+              const justData = justification.data || justification;
+
               const extractArray = (data: any, keys: string[]): string[] => {
                 for (const key of keys) {
-                  if (Array.isArray(data[key])) return data[key]
-                  if (data[key] && typeof data[key] === 'string') return [data[key]]
+                  if (Array.isArray(data[key])) return data[key];
+                  if (data[key] && typeof data[key] === "string")
+                    return [data[key]];
                 }
-                return []
-              }
-              
-              const benefits = extractArray(justData, ['Pros', 'pros'])
-              const drawbacks = extractArray(justData, ['Cons', 'cons'])
-              const suitabilityReasons = extractArray(justData, ['Conclusion', 'conclusion'])
-              
+                return [];
+              };
+
+              const benefits = extractArray(justData, ["Pros", "pros"]);
+              const drawbacks = extractArray(justData, ["Cons", "cons"]);
+              const suitabilityReasons = extractArray(justData, [
+                "Conclusion",
+                "conclusion",
+              ]);
+
               return {
                 id: rec.id.toString(),
                 name: universityDetails.name || "Unknown University",
-                location: universityDetails.location || "Location not specified",
+                location:
+                  universityDetails.location || "Location not specified",
                 logo: universityDetails.logo_url || "/placeholder-logo.svg",
                 matchScore: rec.overall_score * 100,
-                images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
+                images: Array.isArray(universityDetails.images)
+                  ? universityDetails.images
+                  : [],
                 benefits,
                 drawbacks,
                 suitabilityReasons,
-                similarStudents: Array.isArray(similarStudents) ? similarStudents : [],
+                similarStudents: Array.isArray(similarStudents)
+                  ? similarStudents
+                  : [],
                 hasLogoFallback: false,
                 hasImageFallback: false,
                 academic_score: recommendation.academic_score || 0,
@@ -206,9 +258,12 @@ export default function RecommendationsPage() {
                 geographic_score: recommendation.geographic_score || 0,
                 facilities_score: recommendation.overall_fit_score || 0,
                 reputation_score: recommendation.reputation_score || 0,
-              }
+              };
             } catch (error) {
-              console.error(`Error fetching details for university ${rec.university_id}:`, error)
+              console.error(
+                `Error fetching details for university ${rec.university_id}:`,
+                error
+              );
               return {
                 id: rec.id.toString(),
                 name: "Unknown University",
@@ -230,50 +285,53 @@ export default function RecommendationsPage() {
                 geographic_score: 0,
                 facilities_score: 0,
                 reputation_score: 0,
-              }
+              };
             }
           })
-        )
-        
-        universitiesWithDetails.push(...batchResults)
-        
+        );
+
+        universitiesWithDetails.push(...batchResults);
+
         if (universitiesWithDetails.length > 0 && universities.length === 0) {
-          setUniversities([...universitiesWithDetails])
-          setSelectedUniversity(universitiesWithDetails[0])
+          setUniversities([...universitiesWithDetails]);
+          setSelectedUniversity(universitiesWithDetails[0]);
         }
       }
-      
-      setLoadingStage("Preparing your personalized recommendations...")
-      setUniversities(universitiesWithDetails)
-      
+
+      setLoadingStage("Preparing your personalized recommendations...");
+      setUniversities(universitiesWithDetails);
+
       try {
-        localStorage.setItem("cachedRecommendations", JSON.stringify(universitiesWithDetails))
+        localStorage.setItem(
+          "cachedRecommendations",
+          JSON.stringify(universitiesWithDetails)
+        );
       } catch (error) {
-        console.error("Error storing recommendations in localStorage:", error)
+        console.error("Error storing recommendations in localStorage:", error);
       }
     } catch (err) {
-      console.error("Error loading recommendations:", err)
+      console.error("Error loading recommendations:", err);
       toast({
         title: "Error",
         description: "Failed to load recommendations. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
-      setLoadingStage("")
-      setHasAttemptedLoad(true)
+      setIsLoading(false);
+      setLoadingStage("");
+      setHasAttemptedLoad(true);
     }
-  }
+  };
 
   useEffect(() => {
     if (!isAuthLoading) {
       if (user?.username) {
-        loadRecommendations()
+        loadRecommendations();
       } else if (hasAttemptedLoad) {
-        router.push('/auth')
+        router.push("/auth");
       }
     }
-  }, [user?.username, isAuthLoading])
+  }, [user?.username, isAuthLoading]);
 
   useEffect(() => {
     if (selectedUniversity) {
@@ -291,31 +349,37 @@ export default function RecommendationsPage() {
         geographic_score: selectedUniversity.geographic_score,
         facilities_score: selectedUniversity.facilities_score,
         reputation_score: selectedUniversity.reputation_score,
-      })
+      });
     }
-  }, [selectedUniversity])
+  }, [selectedUniversity]);
 
   const handleFindRecommendations = async () => {
-    await loadRecommendations()
-  }
+    await loadRecommendations();
+  };
 
-  const handleSelectPlan = (plan: "quarterly" | "annual" | null) => {
-    setIsPaymentOpen(false)
+  const handleSelectPlan = (
+    plan: "monthly" | "quarterly" | "annual" | "lifetime" | null
+  ) => {
+    setIsPaymentOpen(false);
     if (plan) {
-      localStorage.setItem("subscriptionPlan", plan)
-      router.push("/recommendations")
+      localStorage.setItem("subscriptionPlan", plan);
+      router.push("/recommendations");
     }
-  }
+  };
 
   const handleUniversityClick = (university: University, index: number) => {
     if (index < 3) {
-      setIsPaymentOpen(true)
+      setIsPaymentOpen(true);
     } else {
-      setSelectedUniversity(university)
+      setSelectedUniversity(university);
     }
-  }
+  };
 
-  const getRadarChartData = (university: University, student?: SimilarStudent, studentNumber?: number) => {
+  const getRadarChartData = (
+    university: University,
+    student?: SimilarStudent,
+    studentNumber?: number
+  ) => {
     const labels = [
       "Academic",
       "Personal Fit",
@@ -325,7 +389,7 @@ export default function RecommendationsPage() {
       "Geographic",
       "Facilities",
       "Reputation",
-    ]
+    ];
 
     const universityDataset = {
       label: "Your Scores",
@@ -342,13 +406,13 @@ export default function RecommendationsPage() {
       backgroundColor: "rgba(255, 99, 132, 0.2)",
       borderColor: "rgba(255, 99, 132, 1)",
       borderWidth: 1,
-    }
+    };
 
     if (!student) {
       return {
         labels,
-        datasets: [universityDataset]
-      }
+        datasets: [universityDataset],
+      };
     }
 
     return {
@@ -372,8 +436,8 @@ export default function RecommendationsPage() {
           borderWidth: 1,
         },
       ],
-    }
-  }
+    };
+  };
 
   const radarOptions = {
     scales: {
@@ -405,7 +469,7 @@ export default function RecommendationsPage() {
         text: "Dimension Matching Analysis",
       },
     },
-  }
+  };
 
   if (isAuthLoading || (!hasAttemptedLoad && !user)) {
     return (
@@ -413,30 +477,34 @@ export default function RecommendationsPage() {
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
         <p className="text-gray-500">Initializing...</p>
       </div>
-    )
+    );
   }
 
   if (!user && hasAttemptedLoad) {
     return (
       <div className="container flex h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Please log in to view recommendations</h1>
+          <h1 className="text-2xl font-bold mb-4">
+            Please log in to view recommendations
+          </h1>
           <Button asChild>
             <a href="/auth">Log In</a>
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
-        <p className="text-gray-600 font-medium">{loadingStage || "Preparing recommendations..."}</p>
+        <p className="text-gray-600 font-medium">
+          {loadingStage || "Preparing recommendations..."}
+        </p>
         <p className="text-sm text-gray-400 mt-2">This may take a moment</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -453,7 +521,7 @@ export default function RecommendationsPage() {
               </p>
             </div>
             <Button
-              onClick={() => router.push('/recommendations')}
+              onClick={() => router.push("/recommendations")}
               variant="outline"
               size="sm"
             >
@@ -463,7 +531,9 @@ export default function RecommendationsPage() {
         </div>
 
         <div className="p-4">
-          <h2 className="text-xl font-semibold mb-4">Recommended Universities</h2>
+          <h2 className="text-xl font-semibold mb-4">
+            Recommended Universities
+          </h2>
           <div className="space-y-2">
             {universities.map((university, index) => (
               <div key={university.id} className="relative">
@@ -477,15 +547,19 @@ export default function RecommendationsPage() {
                 >
                   <div className="flex items-center space-x-3">
                     <img
-                      src={university.logo}
-                      alt={`${university.name} logo`}
-                      className="w-8 h-8 rounded-full"
+                      src={
+                        getUniversityImage(university.name) ||
+                        (university.images && university.images.length > 0
+                          ? university.images[0]
+                          : "/placeholder-university.svg")
+                      }
+                      alt={university.name}
+                      className="w-8"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        const uni = universities.find(u => u.id === university.id)
-                        if (uni && !uni.hasLogoFallback) {
-                          uni.hasLogoFallback = true
-                          target.src = "/placeholder-logo.svg"
+                        const target = e.target as HTMLImageElement;
+                        if (!university.hasImageFallback) {
+                          university.hasImageFallback = true;
+                          target.src = "/placeholder-university.svg";
                         }
                       }}
                     />
@@ -497,7 +571,7 @@ export default function RecommendationsPage() {
                     </div>
                   </div>
                 </button>
-                
+
                 {/* Premium badge */}
                 {index < 3 && (
                   <div className="absolute right-2 top-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
@@ -517,7 +591,9 @@ export default function RecommendationsPage() {
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h1 className="text-3xl font-bold">{selectedUniversity.name}</h1>
+                  <h1 className="text-3xl font-bold">
+                    {selectedUniversity.name}
+                  </h1>
                   <p className="text-gray-600">{selectedUniversity.location}</p>
                 </div>
                 <div className="text-right">
@@ -527,23 +603,6 @@ export default function RecommendationsPage() {
                   <div className="text-sm text-gray-600">Match Score</div>
                 </div>
               </div>
-
-              {selectedUniversity.images && selectedUniversity.images.length > 0 && (
-                <div className="relative h-64 mb-6 rounded-lg overflow-hidden">
-                  <img
-                    src={selectedUniversity.images[0]}
-                    alt={selectedUniversity.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      if (!selectedUniversity.hasImageFallback) {
-                        selectedUniversity.hasImageFallback = true
-                        target.src = "/placeholder-university.svg"
-                      }
-                    }}
-                  />
-                </div>
-              )}
 
               {/* Check if this is a premium university */}
               {universities.indexOf(selectedUniversity) < 3 ? (
@@ -576,50 +635,65 @@ export default function RecommendationsPage() {
                     </div>
 
                     <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-3">Why This University?</h2>
+                      <h2 className="text-xl font-semibold mb-3">
+                        Why This University?
+                      </h2>
                       <ul className="space-y-2">
-                        {selectedUniversity.suitabilityReasons.map((reason, index) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-blue-500 mr-2">•</span>
-                            {reason}
-                          </li>
-                        ))}
+                        {selectedUniversity.suitabilityReasons.map(
+                          (reason, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-blue-500 mr-2">•</span>
+                              {reason}
+                            </li>
+                          )
+                        )}
                       </ul>
                     </div>
 
                     {/* Radar Charts - also blurred */}
-                    {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 && (
-                      <div className="mb-6">
-                        <h2 className="text-xl font-semibold mb-3">Similarity Analysis</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {selectedUniversity.similarStudents.map((student, index) => (
-                            <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                              <h3 className="text-lg font-medium mb-2">
-                                You vs. Student {index + 1}
-                              </h3>
-                              <div className="w-full max-w-xs mx-auto">
-                                <Radar
-                                  data={getRadarChartData(selectedUniversity, student, index + 1)}
-                                  options={radarOptions}
-                                />
-                              </div>
-                            </div>
-                          ))}
+                    {selectedUniversity.similarStudents &&
+                      selectedUniversity.similarStudents.length > 0 && (
+                        <div className="mb-6">
+                          <h2 className="text-xl font-semibold mb-3">
+                            Similarity Analysis
+                          </h2>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {selectedUniversity.similarStudents.map(
+                              (student, index) => (
+                                <div
+                                  key={index}
+                                  className="bg-gray-50 p-4 rounded-lg"
+                                >
+                                  <h3 className="text-lg font-medium mb-2">
+                                    You vs. Student {index + 1}
+                                  </h3>
+                                  <div className="w-full max-w-xs mx-auto">
+                                    <Radar
+                                      data={getRadarChartData(
+                                        selectedUniversity,
+                                        student,
+                                        index + 1
+                                      )}
+                                      options={radarOptions}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
 
                   {/* Premium CTA overlay */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 rounded-lg">
-                    <h3 className="text-xl font-bold mb-4">
-                      Premium Content
-                    </h3>
+                    <h3 className="text-xl font-bold mb-4">Premium Content</h3>
                     <p className="text-center max-w-md mb-6">
-                      Unlock full access to view detailed insights and similarity analysis for this premium university match.
+                      Unlock full access to view detailed insights and
+                      similarity analysis for this premium university match.
                     </p>
                     <div className="flex gap-4">
-                      <Button 
+                      <Button
                         onClick={() => setIsPaymentOpen(true)}
                         className="px-6"
                       >
@@ -627,7 +701,7 @@ export default function RecommendationsPage() {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => router.push('/recommendations')}
+                        onClick={() => router.push("/recommendations")}
                       >
                         Free Trial
                       </Button>
@@ -639,7 +713,8 @@ export default function RecommendationsPage() {
                 <>
                   <div className="mb-6">
                     <h2 className="text-xl font-semibold mb-3">Benefits</h2>
-                    {selectedUniversity.benefits && selectedUniversity.benefits.length > 0 ? (
+                    {selectedUniversity.benefits &&
+                    selectedUniversity.benefits.length > 0 ? (
                       <ul className="space-y-2">
                         {selectedUniversity.benefits.map((benefit, index) => (
                           <li key={index} className="flex items-start">
@@ -649,13 +724,16 @@ export default function RecommendationsPage() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-gray-500">No specific benefits listed for this university.</p>
+                      <p className="text-gray-500">
+                        No specific benefits listed for this university.
+                      </p>
                     )}
                   </div>
 
                   <div className="mb-6">
                     <h2 className="text-xl font-semibold mb-3">Drawbacks</h2>
-                    {selectedUniversity.drawbacks && selectedUniversity.drawbacks.length > 0 ? (
+                    {selectedUniversity.drawbacks &&
+                    selectedUniversity.drawbacks.length > 0 ? (
                       <ul className="space-y-2">
                         {selectedUniversity.drawbacks.map((drawback, index) => (
                           <li key={index} className="flex items-start">
@@ -665,46 +743,66 @@ export default function RecommendationsPage() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-gray-500">No specific drawbacks listed for this university.</p>
+                      <p className="text-gray-500">
+                        No specific drawbacks listed for this university.
+                      </p>
                     )}
                   </div>
 
                   <div className="mb-6">
-                    <h2 className="text-xl font-semibold mb-3">Why This University?</h2>
-                    {selectedUniversity.suitabilityReasons && selectedUniversity.suitabilityReasons.length > 0 ? (
+                    <h2 className="text-xl font-semibold mb-3">
+                      Why This University?
+                    </h2>
+                    {selectedUniversity.suitabilityReasons &&
+                    selectedUniversity.suitabilityReasons.length > 0 ? (
                       <ul className="space-y-2">
-                        {selectedUniversity.suitabilityReasons.map((reason, index) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-blue-500 mr-2">•</span>
-                            {reason}
-                          </li>
-                        ))}
+                        {selectedUniversity.suitabilityReasons.map(
+                          (reason, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-blue-500 mr-2">•</span>
+                              {reason}
+                            </li>
+                          )
+                        )}
                       </ul>
                     ) : (
-                      <p className="text-gray-500">No specific suitability reasons listed for this university.</p>
+                      <p className="text-gray-500">
+                        No specific suitability reasons listed for this
+                        university.
+                      </p>
                     )}
                   </div>
 
                   <div className="mb-6">
-                    <h2 className="text-xl font-semibold mb-3">Similar Students</h2>
-                    {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 ? (
+                    <h2 className="text-xl font-semibold mb-3">
+                      Similar Students
+                    </h2>
+                    {selectedUniversity.similarStudents &&
+                    selectedUniversity.similarStudents.length > 0 ? (
                       <ul className="space-y-2">
-                        {selectedUniversity.similarStudents.map((student, index) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-purple-500 mr-2">→</span>
-                            Student {index + 1} - Similarity: {Math.round(student.similarity_score * 100)}%
-                          </li>
-                        ))}
+                        {selectedUniversity.similarStudents.map(
+                          (student, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-purple-500 mr-2">→</span>
+                              Student {index + 1} - Similarity:{" "}
+                              {Math.round(student.similarity_score * 100)}%
+                            </li>
+                          )
+                        )}
                       </ul>
                     ) : (
-                      <p className="text-gray-500">No similar student information available.</p>
+                      <p className="text-gray-500">
+                        No similar student information available.
+                      </p>
                     )}
                   </div>
 
                   {/* University Scores Radar Chart */}
                   {selectedUniversity && (
                     <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-3">University Scores</h2>
+                      <h2 className="text-xl font-semibold mb-3">
+                        Univeristy Similarity Score
+                      </h2>
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <div className="w-full max-w-xs mx-auto">
                           <Radar
@@ -717,26 +815,38 @@ export default function RecommendationsPage() {
                   )}
 
                   {/* Comparison Radar Charts */}
-                  {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 && (
-                    <div className="mb-6">
-                      <h2 className="text-xl font-semibold mb-3">Similarity Analysis (You vs. Similar Students)</h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {selectedUniversity.similarStudents.map((student, index) => (
-                          <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                            <h3 className="text-lg font-medium mb-2">
-                              You vs. Student {index + 1}
-                            </h3>
-                            <div className="w-full max-w-xs mx-auto">
-                              <Radar
-                                data={getRadarChartData(selectedUniversity, student, index + 1)}
-                                options={radarOptions}
-                              />
-                            </div>
-                          </div>
-                        ))}
+                  {selectedUniversity.similarStudents &&
+                    selectedUniversity.similarStudents.length > 0 && (
+                      <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-3">
+                          Similarity Analysis (You vs. Similar Students)
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {selectedUniversity.similarStudents.map(
+                            (student, index) => (
+                              <div
+                                key={index}
+                                className="bg-gray-50 p-4 rounded-lg"
+                              >
+                                <h3 className="text-lg font-medium mb-2">
+                                  You vs. Student {index + 1}
+                                </h3>
+                                <div className="w-full max-w-xs mx-auto">
+                                  <Radar
+                                    data={getRadarChartData(
+                                      selectedUniversity,
+                                      student,
+                                      index + 1
+                                    )}
+                                    options={radarOptions}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </>
               )}
             </div>
@@ -757,11 +867,11 @@ export default function RecommendationsPage() {
       </div>
 
       {/* Payment Popup */}
-      <PaymentPopup 
-        isOpen={isPaymentOpen} 
-        onClose={() => setIsPaymentOpen(false)} 
-        onSelectPlan={handleSelectPlan} 
+      <PaymentPopup
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        onSelectPlan={handleSelectPlan}
       />
     </div>
-  )
+  );
 }
