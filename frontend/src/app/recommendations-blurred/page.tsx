@@ -40,7 +40,7 @@ const PaymentPopup = dynamic(() => import("@/components/payment"), {
 
 // Function to map university names to their image paths
 const getUniversityImage = (universityName: string): string => {
-  const nameToImageMap: Record<string, string> = {
+  const nameToImageMap: { [key: string]: string } = {
     "National University of Singapore": "/images/NUS.png",
     "Nanyang Technological University": "/images/NTU.png",
     "Singapore Management University": "/images/SMU.png",
@@ -48,7 +48,7 @@ const getUniversityImage = (universityName: string): string => {
     "Singapore Institute of Technology": "/images/SIT.png",
   };
 
-  return nameToImageMap[universityName] || null;
+  return nameToImageMap[universityName] || "/images/default-university.png";
 };
 
 interface SimilarStudent {
