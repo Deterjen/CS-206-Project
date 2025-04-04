@@ -511,25 +511,6 @@ export default function RecommendationsPage() {
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
-        {/* Banner at the top of sidebar */}
-        <div className="bg-primary/10 p-4 border-l-4 border-primary mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold">Unlock Full Access</h3>
-              <p className="text-sm text-muted-foreground">
-                Top 3 universities are premium
-              </p>
-            </div>
-            <Button
-              onClick={() => router.push("/recommendations")}
-              variant="outline"
-              size="sm"
-            >
-              Free Trial
-            </Button>
-          </div>
-        </div>
-
         <div className="p-4">
           <h2 className="text-xl font-semibold mb-4">
             Recommended Universities
