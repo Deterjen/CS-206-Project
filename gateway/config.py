@@ -31,8 +31,7 @@ JAMAIBASE_PAT = os.getenv("JAMAIBASE_PAT")
 
 # Deployment configuration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", FRONTEND_URL).split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,https://unify-blue.vercel.app/").split(",")
 
 # Heartbeat service configuration (to prevent idle shutdown on Render)
 ENABLE_HEARTBEAT = os.getenv("ENABLE_HEARTBEAT", "True").lower() in ("true", "1", "t")
