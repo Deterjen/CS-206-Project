@@ -26,7 +26,7 @@ export default function PaymentPopup({ isOpen, onClose, onSelectPlan }: PaymentP
           </CardHeader>
 
           <CardContent className="pt-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Monthly Plan */}
               <Card
                 className="border hover:border-primary transition-colors cursor-pointer"
@@ -92,26 +92,6 @@ export default function PaymentPopup({ isOpen, onClose, onSelectPlan }: PaymentP
                   <div className="text-xs text-green-600 font-medium">
                     Save 58% compared to monthly
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Lifetime Plan */}
-              <Card
-                className="border hover:border-primary transition-colors cursor-pointer relative"
-                onClick={() => onSelectPlan("lifetime")}
-              >
-                <CardContent className="p-6">
-                  <div className="mb-4">
-                    <h3 className="font-bold text-lg">Lifetime</h3>
-                    <p className="text-sm text-muted-foreground">One-time payment</p>
-                  </div>
-
-                  <div className="flex items-baseline mb-2">
-                    <span className="text-3xl font-bold">$75</span>
-                    <span className="text-muted-foreground ml-1">once</span>
-                  </div>
-
-                  <div className="text-xs text-green-600 font-medium">Never pay again!</div>
                 </CardContent>
               </Card>
             </div>
