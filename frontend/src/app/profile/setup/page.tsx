@@ -322,7 +322,7 @@ export default function ProfileSetupPage() {
   }
 
   return (
-    <div className="container py-8">
+    <div className="container py-8 min-w-full">
       <Card className="w-full max-w-4xl mx-auto">
         <CardHeader>
           <CardTitle>Profile Setup</CardTitle>
