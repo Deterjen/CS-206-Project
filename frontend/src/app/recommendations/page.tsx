@@ -3,9 +3,56 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
-import { getRecommendations, getRecommendationDetails, getRecommendationJustification } from "@/api/apiClient"
+import { 
+  getRecommendations, 
+  getRecommendationDetails, 
+  getRecommendationJustification,
+  getSimilarStudents 
+} from "@/api/apiClient"
 import { useAuthContext } from "@/providers/AuthProvider"
 import { Button } from "@/components/ui/button"
+import { Radar } from "react-chartjs-2"
+import { 
+  Chart as ChartJS, 
+  RadialLinearScale, 
+  PointElement, 
+  LineElement, 
+  Filler, 
+  Tooltip, 
+  Legend 
+} from "chart.js"
+
+// Register Chart.js components
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+
+// Function to map university names to their image paths
+const getUniversityImage = (universityName: string): string => {
+  const nameToImageMap: { [key: string]: string } = {
+    "National University of Singapore": "/images/NUS.png",
+    "Nanyang Technological University": "/images/NTU.png",
+    "Singapore Management University": "/images/SMU.png",
+    "Singapore University of Technology and Design": "/images/SUTD.png",
+    "Singapore Institute of Technology": "/images/SIT.png",
+  };
+
+  return nameToImageMap[universityName] || "/images/school.svg";
+};
+
+interface SimilarStudent {
+  id: number
+  recommendation_id: number
+  existing_student_id: string
+  similarity_score: number
+  academic_similarity: number
+  social_similarity: number
+  financial_similarity: number
+  career_similarity: number
+  geographic_similarity: number
+  facilities_similarity: number
+  reputation_similarity: number
+  personal_fit_similarity: number
+  created_at: string
+}
 
 interface University {
   id: string
@@ -17,8 +64,17 @@ interface University {
   benefits: string[]
   drawbacks: string[]
   suitabilityReasons: string[]
+  similarStudents?: SimilarStudent[]
   hasLogoFallback?: boolean
   hasImageFallback?: boolean
+  academic_score?: number
+  personal_fit_score?: number
+  social_score?: number
+  financial_score?: number
+  career_score?: number
+  geographic_score?: number
+  facilities_score?: number
+  reputation_score?: number
 }
 
 export default function RecommendationsPage() {
@@ -28,12 +84,28 @@ export default function RecommendationsPage() {
   const [universities, setUniversities] = useState<University[]>([])
   const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingStage, setLoadingStage] = useState<string>("")
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false)
+
+  const loadingMessages = [
+    "Analyzing your academic preferences...",
+    "Evaluating your extracurricular interests...",
+    "Processing your career aspirations...",
+    "Examining financial parameters...",
+    "Identifying universities with matching programs...",
+    "Finding similar student profiles...",
+    "Calculating cultural fit scores...",
+    "Running geographic preference analysis...",
+    "Evaluating campus facilities that match your needs...",
+    "Ranking universities by overall compatibility...",
+    "Generating personalized match scores...",
+    "Preparing your customized university insights...",
+    "Finalizing top recommendations for you...",
+    "Gathering insights from similar students..."
+  ];
 
   const loadRecommendations = async () => {
     if (!user?.username) {
-      // Only show error and redirect if we're sure auth has finished loading
-      // and we've actually tried to load at least once
       if (!isAuthLoading && hasAttemptedLoad) {
         toast({
           title: "Error",
@@ -45,156 +117,147 @@ export default function RecommendationsPage() {
       return
     }
 
-    setIsLoading(true)
+    // Check for cached recommendations first
     try {
-      // Get recommendations first
+      const cachedRecommendations = localStorage.getItem("cachedRecommendations")
+      if (cachedRecommendations) {
+        console.log("Using cached recommendations")
+        const parsedRecommendations = JSON.parse(cachedRecommendations)
+        setUniversities(parsedRecommendations)
+        if (parsedRecommendations.length > 0) {
+          setSelectedUniversity(parsedRecommendations[0])
+        }
+        setTimeout(() => localStorage.removeItem("cachedRecommendations"), 2000)
+        setHasAttemptedLoad(true)
+        return
+      }
+    } catch (error) {
+      console.error("Error reading cached recommendations:", error)
+    }
+
+    setIsLoading(true)
+    setLoadingStage(loadingMessages[0])
+    
+    try {
+      setLoadingStage(loadingMessages[1])
       const response = await getRecommendations(user.username, 5)
       if (!response.data) {
         throw new Error("No recommendations data received")
       }
       
-      // Use response data as is without type casting
       const recommendations = response.data
-      console.log("Recommendations received:", recommendations)
+      const universitiesWithDetails: University[] = []
       
-      // Fetch details for each recommendation
-      const universitiesWithDetails = await Promise.all(
-        recommendations.map(async (rec) => {
-          try {
-            // Get both details and justification
-            const [detailsResponse, justificationResponse] = await Promise.all([
-              getRecommendationDetails(user.username, rec.id),
-              getRecommendationJustification(user.username, rec.id)
-            ])
-            
-            const details = detailsResponse.data || {}
-            const justification = justificationResponse.data || {}
-            
-            console.log(`Details for university ${rec.university_id}:`, details)
-            console.log(`Raw justification for university ${rec.university_id}:`, justification)
-            
-            // Try to handle various possible formats of justification data
-            // Direct dump of the object for debugging
-            console.log(`Justification JSON: ${JSON.stringify(justification)}`)
-            
-            // Log every property to see what we might be missing
-            if (typeof justification === 'object' && justification !== null) {
-              console.log("Available properties in justification:")
-              Object.keys(justification).forEach(key => {
-                console.log(`${key}: ${JSON.stringify(justification[key])}`)
-              })
+      const batchSize = 2
+      for (let i = 0; i < recommendations.length; i += batchSize) {
+        const batch = recommendations.slice(i, i + batchSize)
+        
+        const messageIndex = Math.min(
+          3 + Math.floor((i / recommendations.length) * (loadingMessages.length - 3)),
+          loadingMessages.length - 1
+        )
+        setLoadingStage(loadingMessages[messageIndex])
+        
+        const batchResults = await Promise.all(
+          batch.map(async (rec) => {
+            try {
+              const [detailsResponse, justificationResponse, similarStudentsResponse] = await Promise.all([
+                getRecommendationDetails(user.username, rec.id),
+                getRecommendationJustification(user.username, rec.id).catch(err => {
+                  console.error(`Failed to get justification for ${rec.university_id}:`, err)
+                  return { data: {} }
+                }),
+                getSimilarStudents(user.username, rec.id).catch(err => {
+                  console.error(`Failed to get similar students for ${rec.university_id}:`, err)
+                  return { data: [] }
+                })
+              ])
+              
+              const details = detailsResponse.data || {}
+              const recommendation = details.recommendation || {}
+              const justification = justificationResponse.data || {}
+              const similarStudents = similarStudentsResponse.data || []
+              
+              const universityDetails = details.university || {}
+              const justData = justification.data || justification
+              
+              const extractArray = (data: any, keys: string[]): string[] => {
+                for (const key of keys) {
+                  if (Array.isArray(data[key])) return data[key]
+                  if (data[key] && typeof data[key] === 'string') return [data[key]]
+                }
+                return []
+              }
+              
+              const benefits = extractArray(justData, ['Pros', 'pros'])
+              const drawbacks = extractArray(justData, ['Cons', 'cons'])
+              const suitabilityReasons = extractArray(justData, ['Conclusion', 'conclusion'])
+              
+              return {
+                id: rec.id.toString(),
+                name: universityDetails.name || "Unknown University",
+                location: universityDetails.location || "Location not specified",
+                logo: universityDetails.logo_url || "/placeholder-logo.svg",
+                matchScore: rec.overall_score * 100,
+                images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
+                benefits,
+                drawbacks,
+                suitabilityReasons,
+                similarStudents: Array.isArray(similarStudents) ? similarStudents : [],
+                hasLogoFallback: false,
+                hasImageFallback: false,
+                academic_score: recommendation.academic_score || 0,
+                personal_fit_score: recommendation.personal_fit_score || 0,
+                social_score: recommendation.social_score || 0,
+                financial_score: recommendation.financial_score || 0,
+                career_score: recommendation.career_score || 0,
+                geographic_score: recommendation.geographic_score || 0,
+                facilities_score: recommendation.overall_fit_score || 0,
+                reputation_score: recommendation.reputation_score || 0,
+              }
+            } catch (error) {
+              console.error(`Error fetching details for university ${rec.university_id}:`, error)
+              return {
+                id: rec.id.toString(),
+                name: "Unknown University",
+                location: "Location not specified",
+                logo: "/placeholder-logo.svg",
+                matchScore: rec.overall_score * 100,
+                images: [],
+                benefits: [],
+                drawbacks: [],
+                suitabilityReasons: [],
+                similarStudents: [],
+                hasLogoFallback: true,
+                hasImageFallback: true,
+                academic_score: 0,
+                personal_fit_score: 0,
+                social_score: 0,
+                financial_score: 0,
+                career_score: 0,
+                geographic_score: 0,
+                facilities_score: 0,
+                reputation_score: 0,
+              }
             }
-
-            // Extract university details from the nested structure
-            const universityDetails = details.university || {}
-            
-            // Extract justification data using the correct case-sensitive property names and handle all possible formats
-            let benefits = []
-            let drawbacks = []
-            let suitabilityReasons = []
-            
-            // Handle case where the response might be nested
-            const justData = justification.data || justification
-            
-            // Check for array properties first, then check string properties
-            if (Array.isArray(justData.Pros)) {
-              benefits = justData.Pros
-            } else if (justData.Pros) {
-              benefits = [justData.Pros]
-            }
-            
-            if (Array.isArray(justData.Cons)) {
-              drawbacks = justData.Cons
-            } else if (justData.Cons) {
-              drawbacks = [justData.Cons]
-            }
-            
-            if (Array.isArray(justData.Conclusion)) {
-              suitabilityReasons = justData.Conclusion
-            } else if (justData.Conclusion) {
-              suitabilityReasons = [justData.Conclusion]
-            }
-            
-            // If benefits is still empty, try lowercase properties
-            if (benefits.length === 0 && Array.isArray(justData.pros)) {
-              benefits = justData.pros
-            } else if (benefits.length === 0 && justData.pros) {
-              benefits = [justData.pros]
-            }
-            
-            if (drawbacks.length === 0 && Array.isArray(justData.cons)) {
-              drawbacks = justData.cons
-            } else if (drawbacks.length === 0 && justData.cons) {
-              drawbacks = [justData.cons]
-            }
-            
-            if (suitabilityReasons.length === 0 && Array.isArray(justData.conclusion)) {
-              suitabilityReasons = justData.conclusion
-            } else if (suitabilityReasons.length === 0 && justData.conclusion) {
-              suitabilityReasons = [justData.conclusion]
-            }
-            
-            console.log(`Processed data for ${universityDetails.name}:`, {
-              benefits,
-              drawbacks,
-              suitabilityReasons
-            })
-            
-            // Add guard to ensure we have arrays for these properties
-            const finalBenefits = Array.isArray(benefits) ? benefits : []
-            const finalDrawbacks = Array.isArray(drawbacks) ? drawbacks : []
-            const finalSuitabilityReasons = Array.isArray(suitabilityReasons) ? suitabilityReasons : []
-            
-            console.log(`FINAL data being returned:`, {
-              name: universityDetails.name || "Unknown University",
-              benefits: finalBenefits,
-              drawbacks: finalDrawbacks,
-              suitabilityReasons: finalSuitabilityReasons
-            })
-            
-            return {
-              id: rec.id.toString(),
-              name: universityDetails.name || "Unknown University",
-              location: universityDetails.location || "Location not specified",
-              logo: universityDetails.logo_url || "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100, // Convert to percentage
-              images: Array.isArray(universityDetails.images) ? universityDetails.images : [],
-              benefits: finalBenefits,
-              drawbacks: finalDrawbacks,
-              suitabilityReasons: finalSuitabilityReasons,
-              hasLogoFallback: false,
-              hasImageFallback: false
-            }
-          } catch (error) {
-            console.error(`Error fetching details for university ${rec.university_id}:`, error)
-            return {
-              id: rec.id.toString(),
-              name: "Unknown University",
-              location: "Location not specified",
-              logo: "/placeholder-logo.svg",
-              matchScore: rec.overall_score * 100,
-              images: [],
-              benefits: [],
-              drawbacks: [],
-              suitabilityReasons: [],
-              hasLogoFallback: true,
-              hasImageFallback: true
-            }
-          }
-        })
-      )
-
-      console.log("Universities with details:", universitiesWithDetails)
+          })
+        )
+        
+        universitiesWithDetails.push(...batchResults)
+        
+        if (universitiesWithDetails.length > 0 && universities.length === 0) {
+          setUniversities([...universitiesWithDetails])
+          setSelectedUniversity(universitiesWithDetails[0])
+        }
+      }
       
+      setLoadingStage("Preparing your personalized recommendations...")
       setUniversities(universitiesWithDetails)
-      if (universitiesWithDetails.length > 0) {
-        setSelectedUniversity(universitiesWithDetails[0])
-      } else {
-        toast({
-          title: "No Recommendations",
-          description: "No university recommendations found. Please try again.",
-          variant: "destructive",
-        })
+      
+      try {
+        localStorage.setItem("cachedRecommendations", JSON.stringify(universitiesWithDetails))
+      } catch (error) {
+        console.error("Error storing recommendations in localStorage:", error)
       }
     } catch (err) {
       console.error("Error loading recommendations:", err)
@@ -205,30 +268,37 @@ export default function RecommendationsPage() {
       })
     } finally {
       setIsLoading(false)
+      setLoadingStage("")
       setHasAttemptedLoad(true)
     }
   }
 
   useEffect(() => {
-    // Only load if auth is done loading and we have a user
     if (!isAuthLoading) {
       if (user?.username) {
         loadRecommendations()
       } else if (hasAttemptedLoad) {
-        // Only redirect if we've tried loading at least once
         router.push('/auth')
       }
     }
   }, [user?.username, isAuthLoading])
 
-  // Debug selected university
   useEffect(() => {
     if (selectedUniversity) {
       console.log("SELECTED UNIVERSITY:", {
         name: selectedUniversity.name,
         benefits: selectedUniversity.benefits,
         drawbacks: selectedUniversity.drawbacks,
-        suitabilityReasons: selectedUniversity.suitabilityReasons
+        suitabilityReasons: selectedUniversity.suitabilityReasons,
+        similarStudents: selectedUniversity.similarStudents,
+        academic_score: selectedUniversity.academic_score,
+        personal_fit_score: selectedUniversity.personal_fit_score,
+        social_score: selectedUniversity.social_score,
+        financial_score: selectedUniversity.financial_score,
+        career_score: selectedUniversity.career_score,
+        geographic_score: selectedUniversity.geographic_score,
+        facilities_score: selectedUniversity.facilities_score,
+        reputation_score: selectedUniversity.reputation_score,
       })
     }
   }, [selectedUniversity])
@@ -237,16 +307,107 @@ export default function RecommendationsPage() {
     await loadRecommendations()
   }
 
-  // Show loading spinner while auth is initializing or during first load
+  const getRadarChartData = (university: University, student?: SimilarStudent, studentNumber?: number) => {
+    const labels = [
+      "Academic",
+      "Personal Fit",
+      "Social",
+      "Financial",
+      "Career",
+      "Geographic",
+      "Facilities",
+      "Reputation",
+    ]
+
+    const universityDataset = {
+      label: "Your Scores",
+      data: [
+        (university.academic_score ?? 0) * 10,
+        (university.personal_fit_score ?? 0) * 10,
+        (university.social_score ?? 0) * 10,
+        (university.financial_score ?? 0) * 10,
+        (university.career_score ?? 0) * 10,
+        (university.geographic_score ?? 0) * 10,
+        (university.facilities_score ?? 0) * 10,
+        (university.reputation_score ?? 0) * 10,
+      ],
+      backgroundColor: "rgba(255, 99, 132, 0.2)",
+      borderColor: "rgba(255, 99, 132, 1)",
+      borderWidth: 1,
+    }
+
+    if (!student) {
+      return {
+        labels,
+        datasets: [universityDataset]
+      }
+    }
+
+    return {
+      labels,
+      datasets: [
+        universityDataset,
+        {
+          label: `Student ${studentNumber} Similarity`,
+          data: [
+            student.academic_similarity * 10,
+            student.personal_fit_similarity * 10,
+            student.social_similarity * 10,
+            student.financial_similarity * 10,
+            student.career_similarity * 10,
+            student.geographic_similarity * 10,
+            student.facilities_similarity * 10,
+            student.reputation_similarity * 10,
+          ],
+          backgroundColor: "rgba(0, 255, 0, 0.2)",
+          borderColor: "rgba(0, 255, 0, 1)",
+          borderWidth: 1,
+        },
+      ],
+    }
+  }
+
+  const radarOptions = {
+    scales: {
+      r: {
+        angleLines: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+        grid: {
+          color: "rgba(0, 0, 0, 0.1)",
+        },
+        ticks: {
+          beginAtZero: true,
+          max: 10,
+          stepSize: 2,
+        },
+        pointLabels: {
+          font: {
+            size: 12,
+          },
+        },
+      },
+    },
+    plugins: {
+      legend: {
+        position: "top" as const,
+      },
+      title: {
+        display: true,
+        text: "Dimension Matching Analysis",
+      },
+    },
+  }
+
   if (isAuthLoading || (!hasAttemptedLoad && !user)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+        <p className="text-gray-500">Initializing...</p>
       </div>
     )
   }
 
-  // Only show login prompt if we're sure auth has finished and we've tried loading
   if (!user && hasAttemptedLoad) {
     return (
       <div className="container flex h-screen items-center justify-center">
@@ -262,57 +423,81 @@ export default function RecommendationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+        <p className="text-gray-500">{loadingStage || "Loading recommendations..."}</p>
       </div>
     )
   }
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
+        <div className="bg-green-50 p-4 border-l-4 border-green-500">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm leading-5 font-medium text-green-800">
+                Full Access Unlocked
+              </p>
+            </div>
+          </div>
+        </div>
+        
         <div className="p-4">
           <h2 className="text-xl font-semibold mb-4">Recommended Universities</h2>
-          <div className="space-y-2">
-            {universities.map((university) => (
-              <button
-                key={university.id}
-                onClick={() => setSelectedUniversity(university)}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedUniversity?.id === university.id
-                    ? "bg-primary text-white"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <div className="flex items-center space-x-3">
+          {universities.length > 0 ? (
+            <div className="space-y-2">
+              {universities.map((university) => (
+                <button
+                  key={university.id}
+                  onClick={() => setSelectedUniversity(university)}
+                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    selectedUniversity?.id === university.id
+                      ? "bg-primary text-white"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
                   <img
-                    src={university.logo}
-                    alt={`${university.name} logo`}
-                    className="w-8 h-8 rounded-full"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      const uni = universities.find(u => u.id === university.id);
-                      if (uni && !uni.hasLogoFallback) {
-                        uni.hasLogoFallback = true;
-                        target.src = "/placeholder-logo.svg";
-                      }
-                    }}
-                  />
-                  <div>
-                    <div className="font-medium">{university.name}</div>
-                    <div className="text-sm opacity-75">
-                      Match Score: {Math.round(university.matchScore)}%
+                      src={getUniversityImage(university.name) || 
+                          (university.images && university.images.length > 0 ? 
+                            university.images[0] : "/placeholder-university.svg")}
+                      alt={university.name}
+                      className="w-8"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        if (!university.hasImageFallback) {
+                          university.hasImageFallback = true
+                          target.src = "/placeholder-university.svg"
+                        }
+                      }}
+                    />
+                    <div>
+                      <div className="font-medium">{university.name}</div>
+                      <div className="text-sm opacity-75">
+                        Match Score: {Math.round(university.matchScore)}%
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-6 text-gray-500">
+              <p>No recommendations found</p>
+              <Button variant="outline" className="mt-4" onClick={handleFindRecommendations}>
+                Refresh
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 p-8 overflow-y-auto">
         {selectedUniversity ? (
           <div className="max-w-4xl mx-auto">
@@ -330,25 +515,6 @@ export default function RecommendationsPage() {
                 </div>
               </div>
 
-              {/* Image Carousel */}
-              {selectedUniversity.images && selectedUniversity.images.length > 0 && (
-                <div className="relative h-64 mb-6 rounded-lg overflow-hidden">
-                  <img
-                    src={selectedUniversity.images[0]}
-                    alt={selectedUniversity.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      if (!selectedUniversity.hasImageFallback) {
-                        selectedUniversity.hasImageFallback = true;
-                        target.src = "/placeholder-university.svg";
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Benefits */}
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Benefits</h2>
                 {selectedUniversity.benefits && selectedUniversity.benefits.length > 0 ? (
@@ -365,7 +531,6 @@ export default function RecommendationsPage() {
                 )}
               </div>
 
-              {/* Drawbacks */}
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Drawbacks</h2>
                 {selectedUniversity.drawbacks && selectedUniversity.drawbacks.length > 0 ? (
@@ -382,8 +547,7 @@ export default function RecommendationsPage() {
                 )}
               </div>
 
-              {/* Suitability Reasons */}
-              <div>
+              <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-3">Why This University?</h2>
                 {selectedUniversity.suitabilityReasons && selectedUniversity.suitabilityReasons.length > 0 ? (
                   <ul className="space-y-2">
@@ -398,6 +562,59 @@ export default function RecommendationsPage() {
                   <p className="text-gray-500">No specific suitability reasons listed for this university.</p>
                 )}
               </div>
+
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold mb-3">Similar Students</h2>
+                {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 ? (
+                  <ul className="space-y-2">
+                    {selectedUniversity.similarStudents.map((student, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-purple-500 mr-2">→</span>
+                        Student {index + 1} - Similarity: {Math.round(student.similarity_score * 100)}%
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500">No similar student information available.</p>
+                )}
+              </div>
+
+              {/* University Scores Radar Chart */}
+              {selectedUniversity && (
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-3">University Similarity Scores</h2>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="w-full max-w-xs mx-auto">
+                      <Radar
+                        data={getRadarChartData(selectedUniversity)}
+                        options={radarOptions}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comparison Radar Charts */}
+              {selectedUniversity.similarStudents && selectedUniversity.similarStudents.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-3">Similarity Analysis (You vs. Similar Students)</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {selectedUniversity.similarStudents.map((student, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                        <h3 className="text-lg font-medium mb-2">
+                          You vs. Student {index + 1}
+                        </h3>
+                        <div className="w-full max-w-xs mx-auto">
+                          <Radar
+                            data={getRadarChartData(selectedUniversity, student, index + 1)}
+                            options={radarOptions}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (

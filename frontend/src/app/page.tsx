@@ -16,26 +16,26 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MatchingAlgorithmVisualization from "@/components/matching-algo-vis";
 
 export default function LandingPage() {
   return (
-    <div>
+    <div className="flex flex-col min-h-screen overflow-x-hidden">
       {/* Hero Section */}
-      <section className="min-h-screen h-screen flex flex-col justify-center w-full bg-muted/50">
-        <div className="container mx-auto px-4 py-8 flex flex-col items-center text-center">
+      <section className="min-h-screen flex flex-col justify-center w-full bg-muted/50">
+        <div className="container mx-auto px-4 md:px-8 py-16 flex flex-col items-center text-center">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full mb-6 text-sm font-medium">
             <BadgeCheck className="h-4 w-4" />
             Simplify Your Search, Amplify Your Future!
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight max-w-3xl mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight max-w-3xl mb-6">
             Find the University That&apos;s{" "}
             <span className="text-primary">Made for You</span>
           </h1>
 
-          <p className="mt-4 text-xl text-muted-foreground max-w-2xl">
+          <p className="mt-4 text-lg md:text-xl text-muted-foreground max-w-2xl">
             Too many options, too little clarity? Our AI matches you with
             universities where students like you thrive, based on your unique
             profile, preferences, and goals.
@@ -62,7 +62,7 @@ export default function LandingPage() {
         id="problem"
         className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
       >
-        <div className="container mx-auto px-32 py-8">
+        <div className="container mx-auto px-4 md:px-8 lg:px-16 xl:px-24 py-16">
           <div className="flex flex-col lg:flex-row gap-12 items-center">
             <div className="lg:w-1/2">
               <h2 className="text-3xl md:text-4xl font-bold mb-6">
@@ -135,11 +135,11 @@ export default function LandingPage() {
       {/* Multi-dimensional Analysis */}
       <section
         id="features"
-        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
+        className="min-h-screen flex flex-col justify-center w-full bg-muted/50 relative"
       >
-        <div className="container mx-auto px-32 py-8">
+        <div className="container mx-auto px-4 md:px-8 lg:px-16 xl:px-24 py-16">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 relative z-10">
               Find Your Perfect Match Across{" "}
               <span className="text-primary">8 Key Dimensions</span>
             </h2>
@@ -271,137 +271,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section
-        id="how-it-works"
-        className="min-h-screen flex flex-col justify-center w-full bg-muted/50"
-      >
-        <div className="container mx-auto px-32 py-32">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-6">
-            How <span className="text-primary">Unify</span> Works
-          </h2>
-          <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-16">
-            Our data-driven approach combines real student experiences with your
-            unique profile to find your perfect university match.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <Tabs defaultValue="profile" className="w-full">
-                <TabsList className="grid grid-cols-4 mb-8">
-                  <TabsTrigger value="profile">Step 1</TabsTrigger>
-                  <TabsTrigger value="data">Step 2</TabsTrigger>
-                  <TabsTrigger value="match">Step 3</TabsTrigger>
-                  <TabsTrigger value="decide">Step 4</TabsTrigger>
-                </TabsList>
-                <TabsContent value="profile" className="mt-0">
-                  <Image
-                    src="/placeholder.svg?height=400&width=500"
-                    alt="Creating your profile"
-                    width={500}
-                    height={400}
-                    className="rounded-lg shadow-lg border border-border"
-                  />
-                </TabsContent>
-                <TabsContent value="data" className="mt-0">
-                  <Image
-                    src="/placeholder.svg?height=400&width=500"
-                    alt="Data processing"
-                    width={500}
-                    height={400}
-                    className="rounded-lg shadow-lg border border-border"
-                  />
-                </TabsContent>
-                <TabsContent value="match" className="mt-0">
-                  <Image
-                    src="/placeholder.svg?height=400&width=500"
-                    alt="Matching algorithm"
-                    width={500}
-                    height={400}
-                    className="rounded-lg shadow-lg border border-border"
-                  />
-                </TabsContent>
-                <TabsContent value="decide" className="mt-0">
-                  <Image
-                    src="/placeholder.svg?height=400&width=500"
-                    alt="Make informed decisions"
-                    width={500}
-                    height={400}
-                    className="rounded-lg shadow-lg border border-border"
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            <div className="space-y-10">
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
-                  1
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    Create Your Profile
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Tell us about your academic interests, personality traits,
-                    preferences, extracurricular activities, and what matters
-                    most to you in a university.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
-                  2
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    Upload Documents
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Share your transcripts and resume to help our algorithm
-                    better understand your academic strengths and
-                    extracurricular involvement.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
-                  3
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    Get Personalized Recommendations
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Our algorithm matches you with universities where students
-                    with similar profiles thrive, analyzing fit across all 8
-                    dimensions.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold">
-                  4
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    Make Informed Decisions
-                  </h3>
-                  <p className="text-muted-foreground">
-                    See detailed explanations for each recommendation, including
-                    specific strengths and potential challenges to help you
-                    confidently choose where to apply.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Data-driven approach */}
       <section className="min-h-screen flex flex-col justify-center w-full bg-muted/50">
         <div className="container mx-auto px-32 py-8">
@@ -498,10 +367,10 @@ export default function LandingPage() {
                   />
                 </div>
                 <h3 className="text-xl font-semibold mb-1">
-                  Stanford University
+                  National University Singapore
                 </h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Stanford, CA
+                  Singapore, Singapore
                 </p>
               </div>
               <CardContent className="p-6 pt-0">
@@ -535,9 +404,9 @@ export default function LandingPage() {
                     height={40}
                   />
                 </div>
-                <h3 className="text-xl font-semibold mb-1">UC Berkeley</h3>
+                <h3 className="text-xl font-semibold mb-1">Singapore Management University</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Berkeley, CA
+                  Singapore, Singapore
                 </p>
               </div>
               <CardContent className="p-6 pt-0">
@@ -571,9 +440,9 @@ export default function LandingPage() {
                     height={40}
                   />
                 </div>
-                <h3 className="text-xl font-semibold mb-1">MIT</h3>
+                <h3 className="text-xl font-semibold mb-1">Nanyang Technological University</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Cambridge, MA
+                  Singapore, Singapore
                 </p>
               </div>
               <CardContent className="p-6 pt-0">
@@ -624,23 +493,23 @@ export default function LandingPage() {
             {[
               {
                 name: "Alex Johnson",
-                role: "Computer Science Student at Stanford",
+                role: "Computer Science Student at NTU",
                 quote:
-                  "Unify's multi-dimensional analysis matched me with Stanford based on my programming projects and collaborative work style. The academic and cultural fit was spot on!",
+                  "Unify's multi-dimensional analysis matched me with NTU based on my programming projects and collaborative work style. The academic and cultural fit was spot on!",
                 matchScore: "95% Match",
               },
               {
                 name: "Sarah Chen",
-                role: "Business Major at NYU",
+                role: "Business Major at NUS",
                 quote:
-                  "I was torn between 12 universities until Unify showed me where my profile matched best. The financial feasibility and career connections at NYU were exactly what I needed.",
+                  "I was torn between 12 universities until Unify showed me where my profile matched best. The financial feasibility and career connections at NUS were exactly what I needed.",
                 matchScore: "92% Match",
               },
               {
                 name: "Michael Rodriguez",
-                role: "Engineering Student at Georgia Tech",
+                role: "Engineering Student at SIT",
                 quote:
-                  "The transparent recommendations showed me why Georgia Tech's hands-on approach and innovation ecosystem would fit my personality and learning style perfectly.",
+                  "The transparent recommendations showed me why SIT's hands-on approach and innovation ecosystem would fit my personality and learning style perfectly.",
                 matchScore: "89% Match",
               },
             ].map((testimonial, i) => (
@@ -673,7 +542,6 @@ export default function LandingPage() {
                     &quot;{testimonial.quote}&quot;
                   </p>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-muted"></div>
                     <div>
                       <p className="font-medium">{testimonial.name}</p>
                       <p className="text-sm text-muted-foreground">
