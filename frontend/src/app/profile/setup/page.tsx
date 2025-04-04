@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/providers/AuthProvider";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 // Import each step's form and types
 import Step1Form, { Step1Data } from "./Step1Form";
@@ -15,6 +21,9 @@ import Step5Form, { Step5Data } from "./Step5Form";
 import Step6Form, { Step6Data } from "./Step6Form";
 import Step7Form, { Step7Data } from "./Step7Form";
 import Step8Form, { Step8Data } from "./Step8Form";
+import { submitProfileForm } from "./submitForm";
+import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 
 export default function ProfileSetupPage() {
   const router = useRouter();
@@ -30,6 +39,7 @@ export default function ProfileSetupPage() {
   // Track which step user is on
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Store partial data from each step
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
@@ -47,7 +57,7 @@ export default function ProfileSetupPage() {
       // Check for user-specific profile data
       const userProfileKey = `profileData_${user.username}`;
       const savedData = localStorage.getItem(userProfileKey);
-      
+
       if (savedData) {
         try {
           const data = JSON.parse(savedData);
@@ -60,7 +70,7 @@ export default function ProfileSetupPage() {
           if (data.step6) setStep6Data(data.step6);
           if (data.step7) setStep7Data(data.step7);
           if (data.step8) setStep8Data(data.step8);
-          
+
           console.log("Loaded profile data for:", user.username);
         } catch (error) {
           console.error("Error loading profile data:", error);
@@ -71,7 +81,7 @@ export default function ProfileSetupPage() {
   }, [user?.username, authLoading]);
 
   // Once final step is done, combine everything and submit
-  function handleFinalSubmit() {
+  async function handleFinalSubmit() {
     if (!user?.username) {
       console.error("No user logged in");
       router.push("/auth");
@@ -87,7 +97,9 @@ export default function ProfileSetupPage() {
       culture_importance: step2Data?.cultureImportance || 5,
       interested_activities: step2Data?.extracurriculars || [],
       weekly_extracurricular_hours: parseInt(step2Data?.weeklyHours || "0"),
-      passionate_activities: step2Data?.passionateActivities ? step2Data.passionateActivities.split(',').map(item => item.trim()) : [],
+      passionate_activities: step2Data?.passionateActivities
+        ? step2Data.passionateActivities.split(",").map((item) => item.trim())
+        : [],
       internship_importance: step3Data?.internshipImportance || 5,
       leadership_interest: step3Data?.leadershipInterest === "yes",
       alumni_network_value: step3Data?.alumniNetworkValue || 5,
@@ -104,33 +116,78 @@ export default function ProfileSetupPage() {
       important_selection_factors: step7Data?.selectionFactors || [],
       personality_traits: step8Data?.personalityTraits || [],
       preferred_student_population: step8Data?.studentPopulationSize || "",
-      lifestyle_preferences: step8Data?.lifestylePreferences || ""
+      lifestyle_preferences: step8Data?.lifestylePreferences || "",
     };
 
     // Save user-specific data
-    localStorage.setItem(`profileData_${user.username}`, JSON.stringify({
-      step1: step1Data,
-      step2: step2Data,
-      step3: step3Data,
-      step4: step4Data,
-      step5: step5Data,
-      step6: step6Data,
-      step7: step7Data,
-      step8: step8Data,
-    }));
+    localStorage.setItem(
+      `profileData_${user.username}`,
+      JSON.stringify({
+        step1: step1Data,
+        step2: step2Data,
+        step3: step3Data,
+        step4: step4Data,
+        step5: step5Data,
+        step6: step6Data,
+        step7: step7Data,
+        step8: step8Data,
+      })
+    );
 
     // Save formatted data for recommendations
-    localStorage.setItem("profileData", JSON.stringify(combinedProfile));
+    const stringData = JSON.stringify(combinedProfile);
+    localStorage.setItem("profileData", stringData);
 
-    // Set a flag to prevent redirect loops 
-    localStorage.setItem("profileSubmitted", "true");
+    try {
+      setIsSubmitting(true);
+      const parsedData = JSON.parse(stringData);
+      const result = await submitProfileForm(parsedData, user.username);
 
-    // Navigate away to dashboard
-    router.push("/profile/dashboard");
+      if (result.success) {
+        toast({
+          title: "Profile saved successfully",
+          description:
+            "Your preferences have been saved. Generating recommendations...",
+        });
+      } else {
+        toast({
+          title: "Error saving profile",
+          description: result.error || "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error in profile completion:", error);
+      toast({
+        title: "Error saving profile",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+
+      // Set a flag to prevent redirect loops
+      localStorage.setItem("profileSubmitted", "true");
+  
+      // Navigate away to dashboard
+      router.push("/profile/dashboard");
+    }
+
   }
 
   // Save a step's data and advance to next step
-  function handleStepSubmit(step: number, data: Step1Data | Step2Data | Step3Data | Step4Data | Step5Data | Step6Data | Step7Data | Step8Data) {
+  function handleStepSubmit(
+    step: number,
+    data:
+      | Step1Data
+      | Step2Data
+      | Step3Data
+      | Step4Data
+      | Step5Data
+      | Step6Data
+      | Step7Data
+      | Step8Data
+  ) {
     // Update the state based on which step was completed
     switch (step) {
       case 1:
@@ -188,7 +245,7 @@ export default function ProfileSetupPage() {
         step7: step7Data,
         step8: step8Data,
       };
-      
+
       // Update with the current step's data
       switch (step) {
         case 1:
@@ -216,8 +273,11 @@ export default function ProfileSetupPage() {
           currentProgress.step8 = data as Step8Data;
           break;
       }
-      
-      localStorage.setItem(`profileData_${user.username}`, JSON.stringify(currentProgress));
+
+      localStorage.setItem(
+        `profileData_${user.username}`,
+        JSON.stringify(currentProgress)
+      );
     }
   }
 
@@ -226,6 +286,15 @@ export default function ProfileSetupPage() {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
+  }
+
+  if (isSubmitting) {
+    <div className="flex flex-col items-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+      <p className="text-gray-600 mb-4">
+        Please wait while we save your profile and prepare recommendations...
+      </p>
+    </div>;
   }
 
   // Show loading state while checking auth
@@ -255,14 +324,14 @@ export default function ProfileSetupPage() {
     switch (currentStep) {
       case 1:
         return (
-          <Step1Form 
+          <Step1Form
             initialData={step1Data}
             onNext={(data) => handleStepSubmit(1, data)}
           />
         );
       case 2:
         return (
-          <Step2Form 
+          <Step2Form
             initialData={step2Data}
             onNext={(data) => handleStepSubmit(2, data)}
             onBack={handleBack}
@@ -270,7 +339,7 @@ export default function ProfileSetupPage() {
         );
       case 3:
         return (
-          <Step3Form 
+          <Step3Form
             initialData={step3Data}
             onNext={(data) => handleStepSubmit(3, data)}
             onBack={handleBack}
@@ -278,7 +347,7 @@ export default function ProfileSetupPage() {
         );
       case 4:
         return (
-          <Step4Form 
+          <Step4Form
             initialData={step4Data}
             onNext={(data) => handleStepSubmit(4, data)}
             onBack={handleBack}
@@ -286,7 +355,7 @@ export default function ProfileSetupPage() {
         );
       case 5:
         return (
-          <Step5Form 
+          <Step5Form
             initialData={step5Data}
             onNext={(data) => handleStepSubmit(5, data)}
             onBack={handleBack}
@@ -294,7 +363,7 @@ export default function ProfileSetupPage() {
         );
       case 6:
         return (
-          <Step6Form 
+          <Step6Form
             initialData={step6Data}
             onNext={(data) => handleStepSubmit(6, data)}
             onBack={handleBack}
@@ -302,7 +371,7 @@ export default function ProfileSetupPage() {
         );
       case 7:
         return (
-          <Step7Form 
+          <Step7Form
             initialData={step7Data}
             onNext={(data) => handleStepSubmit(7, data)}
             onBack={handleBack}
@@ -310,7 +379,7 @@ export default function ProfileSetupPage() {
         );
       case 8:
         return (
-          <Step8Form 
+          <Step8Form
             initialData={step8Data}
             onNext={(data) => handleStepSubmit(8, data)}
             onBack={handleBack}
@@ -328,9 +397,7 @@ export default function ProfileSetupPage() {
           <CardTitle>Profile Setup</CardTitle>
           <CardDescription>Step {currentStep} of 8</CardDescription>
         </CardHeader>
-        <CardContent>
-          {renderStep()}
-        </CardContent>
+        <CardContent>{renderStep()}</CardContent>
       </Card>
     </div>
   );
