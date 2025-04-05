@@ -129,6 +129,26 @@ async def register_user(user_data: User):
         raise HTTPException(status_code=500, detail=f"Error registering user: {str(e)}")
 
 
+@app.get("/profile/{username}")
+async def get_user_profile(
+        username: str,
+        current_user: User = Depends(get_current_active_user),
+):
+    try:
+        # Ensure the username in the request matches the authenticated user's username
+        if username != current_user["username"]:
+            raise HTTPException(status_code=403, detail="You can only access your own profile")
+
+        # Get the aspiring student profile for the username
+        profile_data = await recommendation_service.get_aspiring_student_profile(username)
+
+        return {
+            "profile": profile_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
 # Updating account credentials route
 @app.put("/user/update/{username}", response_model=User)
 async def update_user_details(

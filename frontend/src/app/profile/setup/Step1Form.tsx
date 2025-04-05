@@ -174,6 +174,7 @@ export default function Step1Form({
                   <SelectItem value="theoretical">Theoretical</SelectItem>
                   <SelectItem value="group_based">Group-based</SelectItem>
                   <SelectItem value="self_paced">Self-paced/Individual</SelectItem>
+                  <SelectItem value="research_oriented">Research-oriented</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

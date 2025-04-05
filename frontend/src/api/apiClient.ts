@@ -70,55 +70,64 @@ export interface AllRecommendationDetailsResponse {
 }
 
 // API endpoints
+export const getUserProfile = async (username: string) => {
+  try {
+    return await apiClient.get(`/profile/${username}`);
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    throw error;
+  }
+};
+
 export const saveQuestionnaire = async (
   username: string,
-  data: RecommendationRequest
+  data: RecommendationRequest,
 ) => {
   return apiClient.post(`/save_questionaire/${username}`, data);
 };
 
 export const getRecommendations = async (
   username: string,
-  numResults: number = 5
+  numResults: number = 5,
 ) => {
   return apiClient.get<RecommendationResponse[]>(
     `/recommendation/${username}`,
     {
       params: { number_of_results: numResults },
-    }
+    },
   );
 };
 
 export const getRecommendationDetails = async (
   username: string,
-  recommendationId: number
+  recommendationId: number,
 ) => {
   return apiClient.get(
-    `/recommendation/detail/${username}/${recommendationId}`
+    `/recommendation/detail/${username}/${recommendationId}`,
   );
 };
 
 export const getRecommendationJustification = async (
   username: string,
-  recommendationId: number
+  recommendationId: number,
 ) => {
   return apiClient.get(
-    `/recommendation/justification/${username}/${recommendationId}`
+    `/recommendation/justification/${username}/${recommendationId}`,
   );
 };
 
 export const getSimilarStudents = async (
   username: string,
-  recommendationId: number
+  recommendationId: number,
 ) => {
   return apiClient.get(
-    `/recommendation/similar_student/${username}/${recommendationId}`
+    `/recommendation/similar_student/${username}/${recommendationId}`,
   );
 };
 
 export const getAllRecommendationDetails = async (username: string) => {
   return apiClient.get<AllRecommendationDetailsResponse>(
-    `/recommendation/all_details/${username}`
+    `/recommendation/all_details/${username}`,
   );
 };
 

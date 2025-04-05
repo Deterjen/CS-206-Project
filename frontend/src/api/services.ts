@@ -20,12 +20,12 @@ export interface UserUpdateData {
 export interface RecommendationRequest {
   preferred_fields: string[];
   learning_style: string;
-  career_goals: string;
+  career_goals: string[];
   further_education: string;
   culture_importance: number;
   interested_activities: string[];
   weekly_extracurricular_hours: string;
-  passionate_activities: string;
+  passionate_activities: string[];
   internship_importance: number;
   leadership_interest: boolean;
   alumni_network_value: number;
@@ -44,6 +44,12 @@ export interface RecommendationRequest {
   preferred_student_population: string;
   lifestyle_preferences: string;
 }
+
+export const profileService = {
+  getProfile: async (username: string) => {
+    return apiClient.get(`/profile/${username}`);
+  },
+};
 
 export const authService = {
   login: async (credentials: LoginCredentials) => {
