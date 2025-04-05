@@ -43,13 +43,13 @@ export default function ProfileDashboardPage() {
             const formattedData = {
               preferred_fields: apiProfileData.preferred_fields || [],
               learning_style: apiProfileData.learning_style || "",
-              career_goals: apiProfileData.career_goals || "",
+              career_goals: apiProfileData.career_goals.join(", "),
               further_education: apiProfileData.further_education || "",
               culture_importance: apiProfileData.culture_importance || 0,
               interested_activities: apiProfileData.interested_activities || [],
               weekly_extracurricular_hours:
                 apiProfileData.weekly_extracurricular_hours || "",
-              passionate_activities: apiProfileData.passionate_activities || "",
+              passionate_activities: apiProfileData.passionate_activities.join(", "),
               internship_importance: apiProfileData.internship_importance || 0,
               leadership_interest: apiProfileData.leadership_interest || false,
               alumni_network_value: apiProfileData.alumni_network_value || 0,
@@ -113,7 +113,10 @@ export default function ProfileDashboardPage() {
             setProfileCompletion(completionPercentage);
 
             // Store in localStorage for consistency
-            localStorage.setItem("profileData", JSON.stringify(formattedData));
+            localStorage.setItem(
+              "profileData",
+              JSON.parse(JSON.stringify(formattedData))
+            );
 
             setIsLoading(false);
             return;

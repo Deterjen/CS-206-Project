@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import timedelta
@@ -141,6 +142,22 @@ async def get_user_profile(
 
         # Get the aspiring student profile for the username
         profile_data = await recommendation_service.get_aspiring_student_profile(username)
+
+        # Transform specific fields
+        if profile_data:
+            # Handle career_goals
+            if "career_goals" in profile_data and isinstance(profile_data["career_goals"], str):
+                try:
+                    profile_data["career_goals"] = json.loads(profile_data["career_goals"])
+                except:
+                    pass  # Keep as is if parsing fails
+
+            # Handle passionate_activities
+            if "passionate_activities" in profile_data and isinstance(profile_data["passionate_activities"], str):
+                try:
+                    profile_data["passionate_activities"] = json.loads(profile_data["passionate_activities"])
+                except:
+                    pass  # Keep as is if parsing fails
 
         return {
             "profile": profile_data
