@@ -168,7 +168,7 @@ export default function ProfileSetupPage() {
                   standardFields
                 ),
                 learningStyle: mapLearningStyle(profileData.learning_style),
-                careerGoals: profileData.career_goals || "",
+                careerGoals: profileData.career_goals.join(", "),
                 furtherEducation:
                   profileData.further_education?.toLowerCase() || "",
               },
@@ -182,7 +182,7 @@ export default function ProfileSetupPage() {
                   standardActivities
                 ),
                 weeklyHours: profileData.weekly_extracurricular_hours || "",
-                passionateActivities: profileData.passionate_activities || "",
+                passionateActivities: profileData.passionate_activities.join(", "),
               },
               step3: {
                 internshipImportance: profileData.internship_importance || 5,
@@ -313,6 +313,7 @@ export default function ProfileSetupPage() {
             }
 
             // Check and add "other" to arrays if we have custom options
+
             if (
               stepData.step6.importantFacilitiesOther &&
               !stepData.step6.importantFacilities.includes("other")

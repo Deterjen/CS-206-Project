@@ -679,13 +679,6 @@ export default function RecommendationsPage() {
                       >
                         Get Full Access
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push("/recommendations")}
-                        className="cursor-pointer"
-                      >
-                        Free Trial
-                      </Button>
                     </div>
                   </div>
                 </div>
