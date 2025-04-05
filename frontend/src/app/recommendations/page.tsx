@@ -431,7 +431,7 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
         <div className="bg-green-50 p-4 border-l-4 border-green-500">
           <div className="flex items-center">
@@ -456,7 +456,7 @@ export default function RecommendationsPage() {
                 <button
                   key={university.id}
                   onClick={() => setSelectedUniversity(university)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  className={`w-full text-left p-3 rounded-lg transition-colors cursor-pointer ${
                     selectedUniversity?.id === university.id
                       ? "bg-primary text-white"
                       : "hover:bg-gray-100"

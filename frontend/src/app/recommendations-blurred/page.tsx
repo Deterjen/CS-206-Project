@@ -95,8 +95,7 @@ export default function RecommendationsPage() {
   const { user, isLoading: isAuthLoading } = useAuthContext();
   const { toast } = useToast();
   const [universities, setUniversities] = useState<University[]>([]);
-  const [selectedUniversity, setSelectedUniversity] =
-    useState<University | null>(null);
+  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -508,7 +507,7 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-1/4 bg-white shadow-lg overflow-y-auto">
         <div className="p-4">
@@ -520,7 +519,7 @@ export default function RecommendationsPage() {
               <div key={university.id} className="relative">
                 <button
                   onClick={() => handleUniversityClick(university, index)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  className={`w-full text-left p-3 rounded-lg transition-colors cursor-pointer ${
                     selectedUniversity?.id === university.id
                       ? "bg-primary text-white"
                       : "hover:bg-gray-100"
@@ -676,13 +675,14 @@ export default function RecommendationsPage() {
                     <div className="flex gap-4">
                       <Button
                         onClick={() => setIsPaymentOpen(true)}
-                        className="px-6"
+                        className="px-6 cursor-pointer"
                       >
                         Get Full Access
                       </Button>
                       <Button
                         variant="outline"
                         onClick={() => router.push("/recommendations")}
+                        className="cursor-pointer"
                       >
                         Free Trial
                       </Button>
