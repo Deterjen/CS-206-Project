@@ -608,9 +608,9 @@ export default function ProfileSetupPage() {
   // Show loading state while checking auth
   if (authLoading || isLoading) {
     return (
-      <div className="container flex h-screen items-center justify-center">
+      <div className="container flex min-h-screen min-w-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Loading...</h1>
+          <h1 className="text-2xl font-bold mb-4">Loading your profile..</h1>
         </div>
       </div>
     );
