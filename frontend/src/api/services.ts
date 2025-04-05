@@ -45,6 +45,12 @@ export interface RecommendationRequest {
   lifestyle_preferences: string;
 }
 
+export const profileService = {
+  getProfile: async (username: string) => {
+    return apiClient.get(`/profile/${username}`);
+  },
+};
+
 export const authService = {
   login: async (credentials: LoginCredentials) => {
     const formData = new FormData();

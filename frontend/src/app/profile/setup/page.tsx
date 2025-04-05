@@ -24,6 +24,7 @@ import Step8Form, { Step8Data } from "./Step8Form";
 import { submitProfileForm } from "./submitForm";
 import { toast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { profileService } from "@/api/services";
 
 export default function ProfileSetupPage() {
   const router = useRouter();
@@ -54,29 +55,336 @@ export default function ProfileSetupPage() {
   // Load existing profile data if available
   useEffect(() => {
     if (!authLoading && user?.username) {
-      // Check for user-specific profile data
-      const userProfileKey = `profileData_${user.username}`;
-      const savedData = localStorage.getItem(userProfileKey);
+      setIsLoading(true);
 
-      if (savedData) {
+      // First try to get profile data from API
+      const fetchProfileDataFromAPI = async () => {
         try {
-          const data = JSON.parse(savedData);
-          // Carefully load each step data
-          if (data.step1) setStep1Data(data.step1);
-          if (data.step2) setStep2Data(data.step2);
-          if (data.step3) setStep3Data(data.step3);
-          if (data.step4) setStep4Data(data.step4);
-          if (data.step5) setStep5Data(data.step5);
-          if (data.step6) setStep6Data(data.step6);
-          if (data.step7) setStep7Data(data.step7);
-          if (data.step8) setStep8Data(data.step8);
+          const response = await profileService.getProfile(user.username);
+          if (response.data && response.data.profile) {
+            const profileData = response.data.profile;
 
-          console.log("Loaded profile data for:", user.username);
+            // Map learning style from API format to select option values
+            const mapLearningStyle = (apiStyle: string) => {
+              const mapping: { [key: string]: string } = {
+                "Hands-on/Practical": "hands_on",
+                Visual: "visual",
+                Auditory: "auditory",
+                Theoretical: "theoretical",
+                "Group-based": "group_based",
+                "Self-paced/Individual": "self_paced",
+                "Research-oriented": "research_oriented",
+              };
+              return mapping[apiStyle] || "";
+            };
+
+            const standardFields = [
+              "business",
+              "computing_it",
+              "engineering",
+              "sciences",
+              "social_sciences",
+              "arts_humanities",
+              "medicine_health",
+              "law",
+              "education",
+            ];
+
+            function mapPreferredFields(fields: string[] = []) {
+              const mapping: { [key: string]: string } = {
+                Business: "business",
+                "Computing/IT": "computing_it",
+                Engineering: "engineering",
+                Sciences: "sciences",
+                "Social Sciences": "social_sciences",
+                "Arts & Humanities": "arts_humanities",
+                "Medicine & Health": "medicine_health",
+                Law: "law",
+                Education: "education",
+              };
+
+              // Convert each field using the mapping
+              return fields.map(
+                (field) =>
+                  mapping[field] ||
+                  // If no mapping exists, check if it's a custom field
+                  (standardFields.includes(field) ? field : "other")
+              );
+            }
+
+            // Map extracurricular activities to match form values
+            function mapExtracurriculars(activities: string[] = []) {
+              const mapping: { [key: string]: string } = {
+                Sports: "sports",
+                "Arts & Culture": "arts_culture",
+                "Academic Clubs": "academic_clubs",
+                "Community Service": "community_service",
+                "Professional/Career Clubs": "professional_clubs",
+                "Social Clubs": "social_clubs",
+                "Research-oriented Activities": "research_activities",
+              };
+
+              // Convert each activity using the mapping
+              return activities.map(
+                (activity) =>
+                  mapping[activity] ||
+                  // If no mapping exists, check if it's a custom activity
+                  (standardActivities.includes(activity) ? activity : "other")
+              );
+            }
+
+            // Define standard activities array
+            const standardActivities = [
+              "sports",
+              "arts_culture",
+              "academic_clubs",
+              "community_service",
+              "professional_clubs",
+              "social_clubs",
+              "research_activities",
+            ];
+
+            // Get custom fields/activities for "other" fields
+            function getCustomFields(
+              fields: string[] = [],
+              standardList: string[]
+            ) {
+              const customFields = fields.filter(
+                (f) =>
+                  !Object.keys(standardList).includes(f) &&
+                  !standardList.includes(f)
+              );
+              return customFields.join(", ");
+            }
+
+            // Convert API response to step data format expected by the setup forms
+            const stepData = {
+              step1: {
+                preferredFields: mapPreferredFields(
+                  profileData.preferred_fields
+                ),
+                preferredFieldsOther: getCustomFields(
+                  profileData.preferred_fields,
+                  standardFields
+                ),
+                learningStyle: mapLearningStyle(profileData.learning_style),
+                careerGoals: profileData.career_goals || "",
+                furtherEducation:
+                  profileData.further_education?.toLowerCase() || "",
+              },
+              step2: {
+                cultureImportance: profileData.culture_importance || 5,
+                extracurriculars: mapExtracurriculars(
+                  profileData.interested_activities
+                ),
+                extracurricularsOther: getCustomFields(
+                  profileData.interested_activities,
+                  standardActivities
+                ),
+                weeklyHours: profileData.weekly_extracurricular_hours || "",
+                passionateActivities: profileData.passionate_activities || "",
+              },
+              step3: {
+                internshipImportance: profileData.internship_importance || 5,
+                leadershipInterest: profileData.leadership_interest
+                  ? "yes"
+                  : "no",
+                alumniNetworkValue: profileData.alumni_network_value || 5,
+              },
+              step4: {
+                affordabilityImportance:
+                  profileData.affordability_importance || 5,
+                yearlyBudget: profileData.yearly_budget
+                  ? profileData.yearly_budget.toString()
+                  : "",
+                financialAidInterest: profileData.financial_aid_interest
+                  ? "yes"
+                  : "no",
+              },
+              step5: {
+                preferredRegion: profileData.preferred_region || "",
+                // Convert to lowercase to match select options
+                preferredSetting:
+                  profileData.preferred_setting?.toLowerCase() || "",
+                // Map living arrangement to match select options
+                preferredLivingArrangement: mapLivingArrangement(
+                  profileData.preferred_living_arrangement
+                ),
+              },
+              step6: {
+                importantFacilities: profileData.important_facilities || [],
+                // Check if there are custom facilities
+                importantFacilitiesOther: getCustomFacilities(
+                  profileData.important_facilities
+                ),
+                modernAmenitiesImportance:
+                  profileData.modern_amenities_importance || 5,
+              },
+              step7: {
+                rankingImportance: profileData.ranking_importance || 5,
+                alumniTestimonialInfluence:
+                  profileData.alumni_testimonial_influence || 5,
+                selectionFactors: profileData.important_selection_factors || [],
+                // Check if there are custom selection factors
+                selectionFactorsOther: getCustomSelectionFactors(
+                  profileData.important_selection_factors
+                ),
+              },
+              step8: {
+                personalityTraits: profileData.personality_traits || [],
+                // Check if there are custom personality traits
+                personalityTraitsOther: getCustomPersonalityTraits(
+                  profileData.personality_traits
+                ),
+                // Map student population size to match select options
+                studentPopulationSize: mapStudentPopulation(
+                  profileData.preferred_student_population
+                ),
+                lifestylePreferences: profileData.lifestyle_preferences || "",
+              },
+            };
+
+            // Helper function to map living arrangement values
+            function mapLivingArrangement(arrangement: string) {
+              const mapping: { [key: string]: string } = {
+                "On Campus": "on_campus",
+                "Off Campus": "off_campus",
+                "Commute from Home": "commute",
+              };
+              return mapping[arrangement] || "";
+            }
+
+            // Helper function to map student population size
+            function mapStudentPopulation(size: string) {
+              const mapping: { [key: string]: string } = {
+                Small: "small",
+                Medium: "medium",
+                Large: "large",
+              };
+              return mapping[size] || "";
+            }
+
+            // Helper functions to extract custom options
+            function getCustomFacilities(facilities: string[] = []) {
+              const standardFacilities = [
+                "sports_facilities",
+                "libraries",
+                "on_campus_housing",
+                "support_centers",
+                "modern_amenities",
+              ];
+              const customFacilities = facilities.filter(
+                (f) => !standardFacilities.includes(f)
+              );
+              return customFacilities.join(", ");
+            }
+
+            function getCustomSelectionFactors(factors: string[] = []) {
+              const standardFactors = [
+                "academic_reputation",
+                "location",
+                "campus_culture",
+                "affordability",
+                "scholarship_opportunities",
+                "internship_opportunities",
+                "modern_facilities",
+                "alumni_network_strength",
+              ];
+              const customFactors = factors.filter(
+                (f) => !standardFactors.includes(f)
+              );
+              return customFactors.join(", ");
+            }
+
+            function getCustomPersonalityTraits(traits: string[] = []) {
+              const standardTraits = [
+                "extroverted",
+                "introverted",
+                "ambivert",
+                "analytical",
+                "creative",
+                "ambitious",
+                "practical_thinker",
+              ];
+              const customTraits = traits.filter(
+                (t) => !standardTraits.includes(t)
+              );
+              return customTraits.join(", ");
+            }
+
+            // Check and add "other" to arrays if we have custom options
+            if (
+              stepData.step6.importantFacilitiesOther &&
+              !stepData.step6.importantFacilities.includes("other")
+            ) {
+              stepData.step6.importantFacilities.push("other");
+            }
+
+            if (
+              stepData.step7.selectionFactorsOther &&
+              !stepData.step7.selectionFactors.includes("other")
+            ) {
+              stepData.step7.selectionFactors.push("other");
+            }
+
+            if (
+              stepData.step8.personalityTraitsOther &&
+              !stepData.step8.personalityTraits.includes("other")
+            ) {
+              stepData.step8.personalityTraits.push("other");
+            }
+
+            // Set each step's data
+            if (stepData.step1) setStep1Data(stepData.step1);
+            if (stepData.step2) setStep2Data(stepData.step2);
+            if (stepData.step3) setStep3Data(stepData.step3);
+            if (stepData.step4) setStep4Data(stepData.step4);
+            if (stepData.step5) setStep5Data(stepData.step5);
+            if (stepData.step6) setStep6Data(stepData.step6);
+            if (stepData.step7) setStep7Data(stepData.step7);
+            if (stepData.step8) setStep8Data(stepData.step8);
+
+            console.log("Loaded profile data from API for:", user.username);
+            setIsLoading(false);
+            return true; // API fetch successful
+          }
         } catch (error) {
-          console.error("Error loading profile data:", error);
+          console.error("Error fetching profile data from API:", error);
         }
-      }
-      setIsLoading(false);
+        return false; // API fetch failed
+      };
+
+      // Try API first, fall back to localStorage
+      fetchProfileDataFromAPI().then((apiSuccess) => {
+        if (!apiSuccess) {
+          // Check for user-specific profile data in localStorage
+          const userProfileKey = `profileData_${user.username}`;
+          const savedData = localStorage.getItem(userProfileKey);
+
+          if (savedData) {
+            try {
+              const data = JSON.parse(savedData);
+              // Carefully load each step data
+              if (data.step1) setStep1Data(data.step1);
+              if (data.step2) setStep2Data(data.step2);
+              if (data.step3) setStep3Data(data.step3);
+              if (data.step4) setStep4Data(data.step4);
+              if (data.step5) setStep5Data(data.step5);
+              if (data.step6) setStep6Data(data.step6);
+              if (data.step7) setStep7Data(data.step7);
+              if (data.step8) setStep8Data(data.step8);
+
+              console.log(
+                "Loaded profile data from localStorage for:",
+                user.username
+              );
+            } catch (error) {
+              console.error("Error loading profile data:", error);
+            }
+          }
+          setIsLoading(false);
+        }
+      });
     }
   }, [user?.username, authLoading]);
 
@@ -168,11 +476,10 @@ export default function ProfileSetupPage() {
 
       // Set a flag to prevent redirect loops
       localStorage.setItem("profileSubmitted", "true");
-  
+
       // Navigate away to dashboard
       router.push("/profile/dashboard");
     }
-
   }
 
   // Save a step's data and advance to next step

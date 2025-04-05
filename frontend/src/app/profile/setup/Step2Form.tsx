@@ -165,12 +165,12 @@ export default function Step2Form({ initialData, onNext, onBack }: Step2FormProp
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="0">0 (None)</SelectItem>
-                  <SelectItem value="1-5">1–5 hours</SelectItem>
-                  <SelectItem value="6-10">6–10 hours</SelectItem>
-                  <SelectItem value="11-15">11–15 hours</SelectItem>
-                  <SelectItem value="16-20">16–20 hours</SelectItem>
-                  <SelectItem value="20+">20+ hours</SelectItem>
+                  <SelectItem value="0 hours">0 (None)</SelectItem>
+                  <SelectItem value="1-5 hours">1–5 hours</SelectItem>
+                  <SelectItem value="6–10 hours">6–10 hours</SelectItem>
+                  <SelectItem value="11-15 hours">11–15 hours</SelectItem>
+                  <SelectItem value="16-20 hours">16–20 hours</SelectItem>
+                  <SelectItem value="20+ hours">20+ hours</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
